@@ -1,218 +1,226 @@
-# Ludex: A Game Recommendation System for Steam
+# 🚀 **Ludex: A Hybrid Game Recommendation System for Steam**
 
-Ludex is a hybrid game recommendation system for Steam, built as a 5th-semester B.Tech project at IIIT Pune. The goal is to go beyond popularity-only rankings and provide **personalized, content-aware recommendations** that help players actually discover and play the games in their library, instead of letting them gather dust.
+Ludex is a hybrid game recommendation system for Steam, built as a 5th-semester B.Tech project at IIIT Pune.
+It aims to replace Steam’s “discoverability lottery” with **personalized, content-aware recommendations** built from:
 
-> ⚠️ **Status:**  
-> This repository currently implements the **Content-Based Filtering (CBF)** pipeline end-to-end (web crawling → refinement → detailed scrape → feature extraction → CBF recommender).  
-> The **Collaborative Filtering (CF) + weighted hybrid** part is designed but **not yet implemented**.
+- What you **play**, and how long you play it  
+- What the **games actually are**, in terms of theme, genre, mechanics, and metadata  
+
+> 🔷 **Status (2025):**  
+> The full **Content-Based Filtering (CBF)** pipeline is implemented end-to-end:  
+> **crawl → refine → scrape → feature extract → CBF recommend → CLI output**  
+>  
+> The **Collaborative Filtering (CF)** and **Hybrid (CF + CBF)** stages are designed but **not yet implemented**.
 
 ---
 
-## Table of Contents
+## 📌 Table of Contents
 
-- [Motivation](#motivation)  
-- [High-Level Architecture](#high-level-architecture)  
-- [Current Implementation: CBF Pipeline](#current-implementation-cbf-pipeline)  
-  - [1. Steam Web Crawl (Basic Spider)](#1-steam-web-crawl-basic-spider)  
-  - [2. Search Basic Refiner (NSFW + Non-English Filter)](#2-search-basic-refiner-nsfw--non-english-filter)  
-  - [3. Detailed Game Scraper](#3-detailed-game-scraper)  
-  - [4. Feature Extraction & Matrix Building](#4-feature-extraction--matrix-building)  
-  - [5. Content-Based Recommender (Steam Profile)](#5-content-based-recommender-steam-profile)
-- [Planned Work: CF & Hybrid Model](#planned-work-cf--hybrid-model)  
-- [Project Structure](#project-structure)  
-- [Setup & Installation](#setup--installation)  
-- [Running the Pipeline](#running-the-pipeline)  
-- [Notes on Design Choices](#notes-on-design-choices)  
+- [Why Ludex?](#why-ludex)  
+- [System Architecture](#system-architecture)  
+- [CBF Pipeline (Implemented)](#cbf-pipeline-implemented)  
+  - [1. Steam Web Crawl](#1-steam-web-crawl)  
+  - [2. Search Refiner (NSFW + Language Filter)](#2-search-refiner-nsfw--language-filter)  
+  - [3. Detailed Metadata Scraper](#3-detailed-metadata-scraper)  
+  - [4. Feature Extraction](#4-feature-extraction)  
+  - [5. Content-Based Recommendation](#5-content-based-recommendation)  
+- [Planned: Collaborative Filtering (CF)](#planned-collaborative-filtering-cf)  
+- [Planned: Hybrid Scoring](#planned-hybrid-scoring)   
+- [Design Rationale](#design-rationale)  
 - [Future Work](#future-work)  
 - [License](#license)
 
 ---
 
-## Motivation
+## 🎯 **Why Ludex?**
 
-- Steam has **hundreds of thousands of titles** and over **130M monthly active users**.
-- A large fraction of purchased games remain **un-played or barely touched**, which is:
-  - A **waste of money** for users  
-  - A **lost opportunity** for developers  
-  - A **risk** for Steam's long-term engagement
+Steam hosts **100,000+ games**, yet most players use less than **10%** of their libraries.  
+Recommendations often amplify popularity rather than **true similarity**.
 
-Steam recommendations today are driven heavily by **engagement loops** (“rich get richer”), burying high-quality but niche games.
+Ludex focuses on:
 
-Ludex solves this by combining:
+- Precise **game similarity modeling**  
+- A **true user taste profile**  
+---
 
-- **What players play** (behavioural / CF – coming soon)  
-- **What the games are like** (content / CBF – implemented)
+## 🧠 **System Architecture**
+
+                ┌─────────────────────┐
+                │ search_basic.csv     │
+                └──────────┬──────────┘
+                           ▼
+           ┌────────────────────────────────┐
+           │ 1. NSFW + Language Refiner     │
+           └────────────────────────────────┘
+                           ▼
+                search_basic_clean.csv
+                           ▼
+           ┌────────────────────────────────┐
+           │ 2. Detailed Metadata Scraper   │
+           └────────────────────────────────┘
+                           ▼
+                game_details.csv
+                           ▼
+           ┌────────────────────────────────┐
+           │ 3. Auto-Extend Catalogue (NEW) │
+           │    - Detect missing appids     │
+           │    - Crawl top 50 missing      │
+           │    - Append and rebuild        │
+           └────────────────────────────────┘
+                           ▼
+        recommender_matrix.npz (TF-IDF)
+                           ▼
+           ┌────────────────────────────────┐
+           │ User Profile Builder (CBF)     │
+           └────────────────────────────────┘
+                           ▼
+           Personalized Recommendations
 
 ---
 
-## High-Level Architecture
-
-### Planned Hybrid System
-
-1. **Content-Based Filtering (CBF)**  
-   - TF-IDF + metadata vectors built from:
-     - Title  
-     - Genres & tags  
-     - Description  
-     - Developer & Publisher  
-   - Similarity measured with **cosine similarity**
-
-2. **Collaborative Filtering (CF)** *(to be implemented)*  
-   - User–item interaction matrix from Steam playtime  
-   - User-based / item-based similarity  
-   - Matrix factorization for latent preference modelling
-
-3. **Weighted Hybrid (future)**  
-Score(u, i) = α · CF(u, i) + (1 − α) · CBF(u, i)
-
+# 🔄 **CBF Pipeline**
 
 ---
 
-## Current Implementation: CBF Pipeline
+## **1. Initial Steam Crawl**
 
-### 1. Steam Web Crawl (Basic Spider)
+Collects thousands of appids from:
 
-File: `steam_search_spider.py`
+- Top sellers  
+- Most played  
+- Category pages  
+- Search pages  
 
-**Goal:** Generate a large list of Steam titles (~12k–20k) from multiple sources:
-
-- Top Selling  
-- Most Played  
-- Category “Top Rated” pages  
-- New & Trending  
-- Global Search (infinite scroll)  
-
-Output saved to: `data/raw/search_basic.csv`
-
+**Output →** `search_basic.csv`
 
 ---
 
-### 2. Search Basic Refiner (NSFW + Non-English Filter)
+## **2. NSFW + Language Refinement**
 
-File: `search_basic_refiner.py`
+Removes:
 
-This step cleans the dataset generated by Step 1:
+- NSFW or adult titles  
+- Non-Latin languages (CJK, Arabic, Hangul, Cyrillic…)  
 
-- Removes **NSFW titles** (70+ banned patterns)  
-- Removes **non-Latin script titles**  
-  (CJK, Cyrillic, Arabic, Thai, Hangul, etc.)
-
-**Input:** `data/raw/search_basic.csv`
-
-**Output:** `data/raw/search_basic_clean.csv`
-
-
-This ensures the next scraper step receives only clean + English titles.
+**Output →** `search_basic_clean.csv`
 
 ---
 
-### 3. Detailed Game Scraper
+## **3. Detailed Metadata Scraper**
 
-File: `steam_details_spider_parallel.py`
+Parallel scraper using undetected Chrome:
 
-Scrapes detailed metadata **in parallel** for every appid:
+Extracts:
 
-- Developers  
-- Publishers  
+- Title  
 - Genres  
 - Tags  
-- Full game description  
+- Description  
+- Developers  
+- Publishers  
 
-**Input:** `search_basic_clean.csv`  
-**Output:** `game_details.csv`
-
-
----
-
-### 4. Feature Extraction & Matrix Building
-
-Module: `recommender/content_model.py`
-
-Builds a high-dimensional game feature matrix using:
-
-| Feature Block | Description | Weight |
-|---------------|-------------|--------|
-| Title TF–IDF | 1–2 grams | 0.3 |
-| Tags + Genres TF–IDF | strongest signal | **1.0** |
-| Description TF–IDF | semantic context | 0.15 |
-| Developer OHE | studio identity | 0.2 |
-| Publisher OHE | weak studio signal | 0.1 |
-
-The final **L2-normalized sparse matrix** is saved to: `data/processed/recommender_matrix.npz`
+**Output →** `game_details.csv`
 
 ---
 
-### 5. Content-Based Recommender (Steam Profile)
+## **4. Auto-Extend Game Catalogue (NEW)**
 
-Main modules:
+Triggered when running `main.py`:
 
-- `recommender/user_profile.py`
-- `recommender/clustering.py`
-- `main.py`
+1. Fetch user library  
+2. Compare appids with existing catalogue  
+3. Identify missing titles  
+4. Crawl **top 50 most-played missing games** using the same high-quality scraper  
+5. Append new rows to `game_details.csv`  
+6. Rebuild:
+   - `game_details.csv`
+   - `recommender_matrix.npz`  
 
-The recommender supports **three modes**:
-
-#### 1. Global CBF
-Compare user vector to *all* games.
-
-#### 2. Cluster-Aware CBF
-- Builds SVD-reduced feature space  
-- Clusters into 105 clusters  
-- Scores user only within nearest relevant clusters  
-- Faster + more relevant than global
-
-#### 3. Multi-Anchor CBF (default)
-- Uses user’s top-played games as **anchors**
-- For each anchor → find similar games
-- Merge, dedupe, rank by similarity
-
-**CLI:** `python main.py`
-
+**Ensures no owned game is ever missing from the model.**
 
 ---
 
-## Planned Work: CF & Hybrid Model
+## **5. Feature Extraction & Training**
 
-Will implement:
-- Hybrid weighting system (CF + CBF)  
-- Ranking evaluation metrics:
-  - RMSE / MAE  
-  - Precision@K  
-  - NDCG@K
+Using `recommender/model.py`, TF-IDF blocks:
 
+| Block            | Weight |
+|------------------|--------|
+| Tags + Genres    | **0.9** |
+| Title            | 0.3    |
+| Description      | 0.15   |
+| Developer (OHE)  | 0.2    |
+| Publisher (OHE)  | 0.1    |
 
----
-
-## Notes on Design Choices
-
-- TF–IDF on titles/tags captures genre + theme patterns  
-- Descriptions add depth but are noisy → small weight  
-- Dev/Publisher identity influences a game's “feel”  
-- L2-normalization makes cosine similarity trivial  
-- Cluster-aware scoring reduces noise and increases relevance  
-- Multi-anchor mode handles multi-genre players effectively  
+All blocks are concatenated → L2-normalized → saved as `recommender_matrix.npz`.
 
 ---
 
-## Future Work
+## **6. Content-Based Recommender**
 
-**Short-term:**
-- Implement CF  
-- Implement hybrid recommender  
-- Clean modular configuration  
+### Build a user vector
+- Filter games ≥ **MIN_PLAYTIME**  
+- Weight by **log(1 + playtime)**  
+- Weighted average of feature vectors  
+- Normalize → **vᵤ**  
 
-**Long-term:**
-- FastAPI backend  
-- Web interface  
+### Score all games
+CBF(u, i) = vᵤ ⋅ f_i
+
+Mask owned games → return **top-N recommendations**.
 
 ---
 
-## License
 
-MIT License
 
-Copyright (c) 2025 Ludex Project Authors
+# 🔮 Planned: **Collaborative Filtering (CF)**
 
+- Steam playtime → implicit interaction matrix  
+- Item-item / user-user similarity  
+
+CF will output: CF(u, i) → predicted preference
+
+---
+
+# 🧪 Planned: **Hybrid Scoring**
+
+Combine CF and CBF per user: `Hybrid(u, i) = α · CF(u, i) + (1 − α) · CBF(u, i)`
+
+
+Future enhancements:
+- Per-user α based on profile strength  
+
+---
+
+# 🧩 Design Rationale
+
+- **One embedding per game** → clean & consistent CBF  
+- **One embedding per user** → robust representation  
+- **Log-scaled playtime weighting** → prevents whales dominating  
+- **Tags + genres TF-IDF** → strongest similarity signal  
+- **Descriptions add nuance** without dominating  
+- **Dev/pub OHE** → simple studio identity cues  
+- **Everything L2-normalized** → cosine = dot product  
+- Clean path for hybridization with CF models  
+
+---
+
+# 📅 Future Work
+
+### Short-term
+- Implement CF (implicit MF)  
+- Create hybrid scoring pipeline  
+- Add rank-based evaluation (MAP@K, NDCG@K)  
+
+### Long-term
+- Web UI for discovery feed   
+
+---
+
+# 📄 License
+
+MIT License  
+© 2025 Ludex Project Authors
 
 
 
