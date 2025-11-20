@@ -21,15 +21,16 @@ OUTPUT_DIR = DATA_DIR / "processed"
 FEATURE_MATRIX_NPZ = OUTPUT_DIR / "recommender_matrix.npz"
 
 # Max features for TF-IDF blocks
-TAG_TFIDF_MAX_FEATURES = 25_000
-DESC_TFIDF_MAX_FEATURES = 5_000
+TAG_TFIDF_MAX_FEATURES = 15_000
+DESC_TFIDF_MAX_FEATURES = 7_500
 
 # Feature block scaling
 TAG_SCALE = 0.9     # genres + tags (strongest signal)
-DEV_SCALE = 0.2       # developers
-DESC_SCALE = 0.1     # description
-PUB_SCALE = 0.1       # publishers
 TITLE_SCALE = 0.25     # title TF-IDF
+DESC_SCALE = 0.2   # description
+DEV_SCALE = 0.15      # developers
+PUB_SCALE = 0.1       # publishers
+
 
 
 # ======================================================

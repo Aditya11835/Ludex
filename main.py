@@ -17,7 +17,7 @@ from CBF.catalogue_update import ensure_user_games_in_catalogue_and_refresh
 # CONFIG
 # ======================================================
 
-TOP_N = 15
+TOP_N = 20
 MIN_PLAYTIME = 60  # Minimum minutes for an owned game to count strongly
 
 
