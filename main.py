@@ -8,7 +8,7 @@ from CBF.user import (
     fetch_owned_games,
     map_owned_to_indices,
     build_user_content_profile,
-    score_games_cbf,
+    recommend_cbf_user_plus_anchors_mmr,
 )
 from CBF.catalogue_update import ensure_user_games_in_catalogue_and_refresh
 
@@ -18,11 +18,14 @@ from CBF.catalogue_update import ensure_user_games_in_catalogue_and_refresh
 # ======================================================
 
 TOP_N = 20
-MIN_PLAYTIME = 60  # Minimum minutes for an owned game to count strongly
+MIN_PLAYTIME = 60          # Minimum minutes for an owned game to count strongly
+CANDIDATE_POOL_SIZE = 500  # How many top-CBF games to consider before MMR
+BETA_ANCHOR_BLEND = 0.3    # Weight for anchor_soft vs global CBF
+LAMBDA_MMR = 0.7           # Relevance vs diversity in MMR
 
 
 # ======================================================
-# HYBRID HOOKS (CBF + CF)
+# HYBRID HOOKS (CBF + CF) – NOT USED YET, FOR FUTURE CF
 # ======================================================
 
 def normalise_scores(scores: np.ndarray) -> np.ndarray:
@@ -133,10 +136,6 @@ def main():
         owned_mapped=owned_mapped,
         full_matrix_norm=full_matrix_norm,
         min_playtime=MIN_PLAYTIME,
-        # You can tune these if needed:
-        # min_games_for_strict=5,
-        # fallback_top_k=5,
-        # max_strict_anchors=10,
     )
 
     if user_vec is None:
@@ -147,49 +146,71 @@ def main():
         return
 
     # --------------------------------------------------
-    # 6) Compute global CBF scores for ALL games
-    print("Scoring all games via cosine similarity to the user profile (CBF)…")
-    cbf_scores = score_games_cbf(user_vec, full_matrix_norm)  # shape (n_games,)
-    cbf_vector = cbf_scores.copy()  # kept explicitly for CF + hybrid use
+    # 6) Generate CBF recommendations using:
+    #    - global user vector
+    #    - anchor-based soft similarity
+    #    - MMR diversity re-ranking
+    print(
+        "\nScoring games via global user vector + anchor soft scores + MMR "
+        "(CBF-only for now, hybrid-ready)…"
+    )
 
-    # OPTIONAL: save to disk for offline evaluation / later steps
-    # np.save("data/processed/last_user_cbf_scores.npy", cbf_vector)
+    recs = recommend_cbf_user_plus_anchors_mmr(
+        catalogue_df=df,
+        full_matrix_norm=full_matrix_norm,
+        owned_mapped=owned_mapped,
+        user_vec=user_vec,
+        top_n=TOP_N,
+        candidate_pool_size=CANDIDATE_POOL_SIZE,
+        min_playtime=MIN_PLAYTIME,
+        beta=BETA_ANCHOR_BLEND,
+        lambda_mmr=LAMBDA_MMR,
+    )
 
-    # --------------------------------------------------
-    # 7) (Placeholder) Load / compute CF scores for this user
-    # In the future, plug in your CF model here.
-    cf_scores = None  # For now, pure CBF
-
-    # --------------------------------------------------
-    # 8) Combine CBF + CF into hybrid scores (for now: just CBF)
-    hybrid_scores = combine_cbf_cf(cbf_vector, cf_scores, alpha=0.5)
-
-    # Attach scores to catalogue
-    rec_df = df.copy()
-    rec_df["cbf_score"] = cbf_vector
-    rec_df["hybrid_score"] = hybrid_scores
-
-    # --------------------------------------------------
-    # 9) Build recommendation list (mask owned, sort by hybrid score)
-    owned_appids = set(owned_mapped["appid"])
-    candidates = rec_df[~rec_df["appid"].isin(owned_appids)].copy()
-
-    candidates = candidates.sort_values("hybrid_score", ascending=False)
-    recs = candidates.head(TOP_N)
-
-    # --------------------------------------------------
-    # 10) Display results
     if recs.empty:
         print("\nNo recommendations generated.")
         return
 
+    # --------------------------------------------------
+    # 7) (Optional, future) integrate CF here
+    # For now, treat `cbf_anchor_combined` as the CBF signal.
+    # Once CF is available, you can:
+    #
+    #   cf_scores_for_recs = ...
+    #   recs['hybrid_score'] = combine_cbf_cf(
+    #       cbf_scores=recs['cbf_anchor_combined'].to_numpy(),
+    #       cf_scores=cf_scores_for_recs,
+    #       alpha=0.5,
+    #   )
+    #
+    # For now, hybrid_score = cbf_anchor_combined.
+    recs = recs.copy()
+    if "cbf_anchor_combined" in recs.columns:
+        recs["hybrid_score"] = recs["cbf_anchor_combined"]
+    else:
+        # Fallback: just use pure CBF if for some reason the column is missing
+        recs["hybrid_score"] = recs.get("cbf", 0.0)
+
+    # --------------------------------------------------
+    # 8) Display results
     print("\nTop Recommendations (currently CBF-only; hybrid + auto-catalogue-ready):")
     for _, row in recs.iterrows():
+        cbf_val = row.get("cbf", np.nan)
+        hybrid_val = row.get("hybrid_score", np.nan)
+        try:
+            cbf_str = f"{cbf_val:.4f}" if np.isfinite(cbf_val) else "nan"
+        except Exception:
+            cbf_str = "nan"
+        try:
+            hybrid_str = f"{hybrid_val:.4f}" if np.isfinite(hybrid_val) else "nan"
+        except Exception:
+            hybrid_str = "nan"
+
         print(
             f"- {row['title']} "
             f"(appid={row['appid']}, "
-            f"cbf={row['cbf_score']:.4f}, "
-            f"hybrid={row['hybrid_score']:.4f})"
+            f"cbf={cbf_str}, "
+            f"hybrid={hybrid_str})"
         )
 
 

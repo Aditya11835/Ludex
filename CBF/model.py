@@ -28,7 +28,7 @@ DESC_TFIDF_MAX_FEATURES = 7_500
 TAG_SCALE = 0.9     # genres + tags (strongest signal)
 TITLE_SCALE = 0.25     # title TF-IDF
 DESC_SCALE = 0.2   # description
-DEV_SCALE = 0.15      # developers
+DEV_SCALE = 0.2     # developers
 PUB_SCALE = 0.1       # publishers
 
 
