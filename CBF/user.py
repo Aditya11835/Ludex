@@ -71,20 +71,16 @@ def build_user_content_profile(
     owned_mapped: pd.DataFrame,
     full_matrix_norm: sp.csr_matrix,
     min_playtime: int = 60,
-    min_games_for_strict: int = 5,
-    fallback_top_k: int = 5,
-    max_strict_anchors: int = 10,
+    min_games_for_strict: int = 5,  # kept for backward compatibility (unused)
+    fallback_top_k: int = 5,        # kept for backward compatibility (unused)
+    max_strict_anchors: int = 10,   # kept for backward compatibility (unused)
 ) -> Optional[np.ndarray]:
     """
     Build a single user content profile vector v_u in the same space as the games.
 
-    Logic:
-      - Prefer games with playtime >= min_playtime.
-      - If there are at least `min_games_for_strict` such games:
-            * sort them by playtime descending
-            * take the top `max_strict_anchors` as anchors
-      - Otherwise, fall back to the user's top `fallback_top_k` games by playtime
-        (playtime_min > 0), even if they are below min_playtime.
+    Updated logic (simple and robust):
+      - Use *all* games with playtime >= min_playtime as anchors.
+      - If there are none, fall back to *all* games with playtime > 0.
       - If the user has no games with playtime > 0, return None (true cold-start).
 
     Steps (once anchors are chosen):
@@ -99,22 +95,20 @@ def build_user_content_profile(
     """
     owned_mapped = owned_mapped.copy()
 
-    # ----- 1) Strict anchors: games above min_playtime -----
+    # ----- 1) Primary anchors: all games above min_playtime -----
     strict_anchors = owned_mapped[owned_mapped["playtime_min"] >= min_playtime].copy()
 
-    if len(strict_anchors) >= min_games_for_strict:
-        # Use only the top `max_strict_anchors` by playtime to avoid noise
-        strict_anchors = strict_anchors.sort_values("playtime_min", ascending=False)
-        anchors_df = strict_anchors.head(max_strict_anchors)
+    if not strict_anchors.empty:
+        anchors_df = strict_anchors.sort_values("playtime_min", ascending=False)
         print(
-            f"Using top {len(anchors_df)} games with playtime >= {min_playtime} minutes "
+            f"Using {len(anchors_df)} games with playtime >= {min_playtime} minutes "
             "to build user content profile."
         )
     else:
-        # ----- 2) Fallback: few or zero strict anchors -----
+        # ----- 2) Fallback: no games above min_playtime → use any game with playtime > 0 -----
         print(
-            f"User has only {len(strict_anchors)} games with playtime >= {min_playtime} minutes. "
-            "Falling back to top-played games (cold-start contingency)."
+            f"User has no games with playtime >= {min_playtime} minutes. "
+            "Falling back to all games with non-zero playtime (cold-start contingency)."
         )
 
         fallback_candidates = owned_mapped[owned_mapped["playtime_min"] > 0].copy()
@@ -126,14 +120,13 @@ def build_user_content_profile(
             )
             return None
 
-        fallback_candidates = fallback_candidates.sort_values("playtime_min", ascending=False)
-        anchors_df = fallback_candidates.head(fallback_top_k)
+        anchors_df = fallback_candidates.sort_values("playtime_min", ascending=False)
         print(
-            f"Using top {len(anchors_df)} games by playtime (> 0 min) "
+            f"Using {len(anchors_df)} games with playtime > 0 min "
             "to approximate user content profile."
         )
 
-    # If somehow we still have no anchors, bail out.
+    # Safety check
     if anchors_df.empty:
         print("No anchors available to build user profile.")
         return None

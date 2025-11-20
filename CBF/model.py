@@ -37,16 +37,43 @@ TITLE_SCALE = 0.25     # title TF-IDF
 # ======================================================
 
 def split_and_normalize_tags(text: str):
-    """Split semi-structured genres/tags field into clean tokens."""
+    """
+    Split semi-structured genres/tags field into clean tokens.
+
+    NOTE:
+    - Explicitly blacklists the 'Free to Play' tag (and variants):
+      'Free to Play', 'free-to-play', 'FREE TO PLAY', 'f2p', etc.
+    - This prevents 'Free to Play' from dominating the TF–IDF tag space,
+      and removes all 1/2/3-grams that would originate from that tag.
+    """
     if not isinstance(text, str):
         return []
 
     parts = [p.strip() for p in text.split(";") if p.strip()]
     tokens = []
 
-    for p in parts:
-        p = p.lower()
-        p = re.sub(r"-+", " ", p)
+    for raw in parts:
+        raw_lower = raw.lower().strip()
+
+        # --- BLACKLIST: "Free to Play" & variants ---
+        # This catches:
+        # - "free to play"
+        # - "free-to-play"
+        # - "free  to   play" (extra spaces)
+        # - "f2p"
+        if (
+            re.fullmatch(r"free\s*to\s*play", raw_lower)
+            or raw_lower == "free-to-play"
+            or raw_lower == "f2p"
+        ):
+            # Skip this tag/genre entirely
+            continue
+
+        # Normal processing for all other tags/genres
+        p = raw_lower
+        p = re.sub(r"-+", " ", p)  # hyphens → spaces
+
+        # sometimes tags contain commas, split them too
         comma_split = [x.strip() for x in p.split(",") if x.strip()]
 
         for chunk in comma_split:
