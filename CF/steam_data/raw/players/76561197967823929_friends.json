@@ -1,0 +1,86 @@
+{
+  "friendslist": {
+    "friends": [
+      {
+        "steamid": "76561197960435530",
+        "relationship": "friend",
+        "friend_since": 1268222378
+      },
+      {
+        "steamid": "76561197965640811",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197970575295",
+        "relationship": "friend",
+        "friend_since": 1374404205
+      },
+      {
+        "steamid": "76561197974492794",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197993301638",
+        "relationship": "friend",
+        "friend_since": 1242605841
+      },
+      {
+        "steamid": "76561198009814007",
+        "relationship": "friend",
+        "friend_since": 1357177927
+      },
+      {
+        "steamid": "76561198009886408",
+        "relationship": "friend",
+        "friend_since": 1242543323
+      },
+      {
+        "steamid": "76561198013396521",
+        "relationship": "friend",
+        "friend_since": 1346836765
+      },
+      {
+        "steamid": "76561198045038788",
+        "relationship": "friend",
+        "friend_since": 1595298443
+      },
+      {
+        "steamid": "76561198049766356",
+        "relationship": "friend",
+        "friend_since": 1485658098
+      },
+      {
+        "steamid": "76561198080183975",
+        "relationship": "friend",
+        "friend_since": 1358324779
+      },
+      {
+        "steamid": "76561198080198319",
+        "relationship": "friend",
+        "friend_since": 1358324777
+      },
+      {
+        "steamid": "76561198115200076",
+        "relationship": "friend",
+        "friend_since": 1402797236
+      },
+      {
+        "steamid": "76561198304091875",
+        "relationship": "friend",
+        "friend_since": 1515233149
+      },
+      {
+        "steamid": "76561199045312886",
+        "relationship": "friend",
+        "friend_since": 1587371454
+      },
+      {
+        "steamid": "76561199408971707",
+        "relationship": "friend",
+        "friend_since": 1705655719
+      }
+    ]
+  }
+}

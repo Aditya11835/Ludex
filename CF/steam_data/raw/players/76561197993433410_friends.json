@@ -1,0 +1,56 @@
+{
+  "friendslist": {
+    "friends": [
+      {
+        "steamid": "76561197960333589",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197960397983",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197963770174",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197967116718",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968299818",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197971548341",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197975371360",
+        "relationship": "friend",
+        "friend_since": 1228513983
+      },
+      {
+        "steamid": "76561197983472637",
+        "relationship": "friend",
+        "friend_since": 1258833699
+      },
+      {
+        "steamid": "76561197983897306",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197990807263",
+        "relationship": "friend",
+        "friend_since": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,667 @@
+{
+  "response": {
+    "game_count": 165,
+    "games": [
+      {
+        "appid": 10,
+        "playtime_forever": 109
+      },
+      {
+        "appid": 20,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 30,
+        "playtime_forever": 10
+      },
+      {
+        "appid": 40,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 50,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 60,
+        "playtime_forever": 1
+      },
+      {
+        "appid": 70,
+        "playtime_forever": 190
+      },
+      {
+        "appid": 130,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 220,
+        "playtime_forever": 86
+      },
+      {
+        "appid": 240,
+        "playtime_forever": 216
+      },
+      {
+        "appid": 300,
+        "playtime_forever": 24
+      },
+      {
+        "appid": 320,
+        "playtime_forever": 25
+      },
+      {
+        "appid": 360,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 400,
+        "playtime_forever": 79
+      },
+      {
+        "appid": 440,
+        "playtime_forever": 13981
+      },
+      {
+        "appid": 500,
+        "playtime_forever": 1162
+      },
+      {
+        "appid": 550,
+        "playtime_forever": 5332
+      },
+      {
+        "appid": 570,
+        "playtime_forever": 278153
+      },
+      {
+        "appid": 620,
+        "playtime_forever": 164
+      },
+      {
+        "appid": 730,
+        "playtime_forever": 830
+      },
+      {
+        "appid": 1250,
+        "playtime_forever": 509
+      },
+      {
+        "appid": 1610,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 1630,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 3480,
+        "playtime_forever": 119
+      },
+      {
+        "appid": 3540,
+        "playtime_forever": 37
+      },
+      {
+        "appid": 3590,
+        "playtime_forever": 1176
+      },
+      {
+        "appid": 3830,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 4000,
+        "playtime_forever": 9
+      },
+      {
+        "appid": 4540,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 4560,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 6250,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 6800,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 6810,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 6830,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 6840,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 7940,
+        "playtime_forever": 83
+      },
+      {
+        "appid": 9340,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 10180,
+        "playtime_forever": 888
+      },
+      {
+        "appid": 10190,
+        "playtime_forever": 50480
+      },
+      {
+        "appid": 12840,
+        "playtime_forever": 121
+      },
+      {
+        "appid": 20540,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 20900,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 20920,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 23700,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 24960,
+        "playtime_forever": 1804
+      },
+      {
+        "appid": 26900,
+        "playtime_forever": 20
+      },
+      {
+        "appid": 33230,
+        "playtime_forever": 498
+      },
+      {
+        "appid": 34820,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 34900,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 34920,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 35420,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 37000,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 38700,
+        "playtime_forever": 615
+      },
+      {
+        "appid": 41500,
+        "playtime_forever": 186
+      },
+      {
+        "appid": 42680,
+        "playtime_forever": 563
+      },
+      {
+        "appid": 42690,
+        "playtime_forever": 20343
+      },
+      {
+        "appid": 42700,
+        "playtime_forever": 805
+      },
+      {
+        "appid": 42710,
+        "playtime_forever": 3637
+      },
+      {
+        "appid": 42910,
+        "playtime_forever": 101
+      },
+      {
+        "appid": 43110,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 45100,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 46700,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 46710,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 46760,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 46830,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 46840,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 48000,
+        "playtime_forever": 17
+      },
+      {
+        "appid": 48190,
+        "playtime_forever": 110
+      },
+      {
+        "appid": 49600,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 50620,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 50820,
+        "playtime_forever": 9
+      },
+      {
+        "appid": 55100,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 55110,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 57300,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 63800,
+        "playtime_forever": 1
+      },
+      {
+        "appid": 70640,
+        "playtime_forever": 3
+      },
+      {
+        "appid": 72000,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 72850,
+        "playtime_forever": 1
+      },
+      {
+        "appid": 92800,
+        "playtime_forever": 2
+      },
+      {
+        "appid": 102600,
+        "playtime_forever": 31
+      },
+      {
+        "appid": 102840,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 104600,
+        "playtime_forever": 6
+      },
+      {
+        "appid": 113200,
+        "playtime_forever": 239
+      },
+      {
+        "appid": 200670,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 200710,
+        "playtime_forever": 297
+      },
+      {
+        "appid": 202970,
+        "playtime_forever": 27
+      },
+      {
+        "appid": 202990,
+        "playtime_forever": 2797
+      },
+      {
+        "appid": 204060,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 204220,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 207080,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 212030,
+        "playtime_forever": 33
+      },
+      {
+        "appid": 212910,
+        "playtime_forever": 420
+      },
+      {
+        "appid": 220090,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 222880,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 222980,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 227300,
+        "playtime_forever": 30
+      },
+      {
+        "appid": 228200,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 247370,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 250460,
+        "playtime_forever": 13
+      },
+      {
+        "appid": 254700,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 258050,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 268910,
+        "playtime_forever": 131
+      },
+      {
+        "appid": 271590,
+        "playtime_forever": 5838
+      },
+      {
+        "appid": 281920,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 289070,
+        "playtime_forever": 99
+      },
+      {
+        "appid": 292030,
+        "playtime_forever": 1158
+      },
+      {
+        "appid": 303390,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 311190,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 333600,
+        "playtime_forever": 123
+      },
+      {
+        "appid": 340830,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 351150,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 352520,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 357070,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 374320,
+        "playtime_forever": 254
+      },
+      {
+        "appid": 384300,
+        "playtime_forever": 12203
+      },
+      {
+        "appid": 385800,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 387060,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 413150,
+        "playtime_forever": 6
+      },
+      {
+        "appid": 415350,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 420110,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 431960,
+        "playtime_forever": 4038
+      },
+      {
+        "appid": 435150,
+        "playtime_forever": 598
+      },
+      {
+        "appid": 449210,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 462780,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 466520,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 473840,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 475150,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 485080,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 485490,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 489830,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 501760,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 518030,
+        "playtime_forever": 36
+      },
+      {
+        "appid": 521590,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 526740,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 551110,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 578080,
+        "playtime_forever": 49754
+      },
+      {
+        "appid": 583950,
+        "playtime_forever": 295
+      },
+      {
+        "appid": 585550,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 601430,
+        "playtime_forever": 25
+      },
+      {
+        "appid": 602520,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 617290,
+        "playtime_forever": 110
+      },
+      {
+        "appid": 632470,
+        "playtime_forever": 203
+      },
+      {
+        "appid": 646910,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 654770,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 654900,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 663190,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 663200,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 668630,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 678950,
+        "playtime_forever": 165
+      },
+      {
+        "appid": 684410,
+        "playtime_forever": 307
+      },
+      {
+        "appid": 705070,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 714010,
+        "playtime_forever": 481
+      },
+      {
+        "appid": 745880,
+        "playtime_forever": 216
+      },
+      {
+        "appid": 774181,
+        "playtime_forever": 41
+      },
+      {
+        "appid": 776490,
+        "playtime_forever": 35
+      },
+      {
+        "appid": 998940,
+        "playtime_forever": 1186
+      },
+      {
+        "appid": 1057090,
+        "playtime_forever": 429
+      },
+      {
+        "appid": 1113000,
+        "playtime_forever": 1731
+      },
+      {
+        "appid": 1145360,
+        "playtime_forever": 2306
+      },
+      {
+        "appid": 1269260,
+        "playtime_forever": 0
+      },
+      {
+        "appid": 1288310,
+        "playtime_forever": 404
+      },
+      {
+        "appid": 1366540,
+        "playtime_forever": 102
+      },
+      {
+        "appid": 1422450,
+        "playtime_forever": 24
+      },
+      {
+        "appid": 1468810,
+        "playtime_forever": 870
+      },
+      {
+        "appid": 3240220,
+        "playtime_forever": 0
+      }
+    ]
+  }
+}

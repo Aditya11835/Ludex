@@ -1,0 +1,21 @@
+{
+  "friendslist": {
+    "friends": [
+      {
+        "steamid": "76561198235211928",
+        "relationship": "friend",
+        "friend_since": 1693350642
+      },
+      {
+        "steamid": "76561198279527722",
+        "relationship": "friend",
+        "friend_since": 1693350615
+      },
+      {
+        "steamid": "76561198354450357",
+        "relationship": "friend",
+        "friend_since": 1692710300
+      }
+    ]
+  }
+}

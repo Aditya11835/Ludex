@@ -1,0 +1,631 @@
+{
+  "friendslist": {
+    "friends": [
+      {
+        "steamid": "76561197960269706",
+        "relationship": "friend",
+        "friend_since": 1746898384
+      },
+      {
+        "steamid": "76561197960275006",
+        "relationship": "friend",
+        "friend_since": 1711498154
+      },
+      {
+        "steamid": "76561197960276803",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197960285963",
+        "relationship": "friend",
+        "friend_since": 1571486128
+      },
+      {
+        "steamid": "76561197960296864",
+        "relationship": "friend",
+        "friend_since": 1376081123
+      },
+      {
+        "steamid": "76561197960315618",
+        "relationship": "friend",
+        "friend_since": 1574552300
+      },
+      {
+        "steamid": "76561197960337265",
+        "relationship": "friend",
+        "friend_since": 1616875446
+      },
+      {
+        "steamid": "76561197960359661",
+        "relationship": "friend",
+        "friend_since": 1292943354
+      },
+      {
+        "steamid": "76561197960462483",
+        "relationship": "friend",
+        "friend_since": 1587167664
+      },
+      {
+        "steamid": "76561197960462692",
+        "relationship": "friend",
+        "friend_since": 1709957637
+      },
+      {
+        "steamid": "76561197960470622",
+        "relationship": "friend",
+        "friend_since": 1374234114
+      },
+      {
+        "steamid": "76561197960472723",
+        "relationship": "friend",
+        "friend_since": 1574161513
+      },
+      {
+        "steamid": "76561197960525719",
+        "relationship": "friend",
+        "friend_since": 1587176701
+      },
+      {
+        "steamid": "76561197960700332",
+        "relationship": "friend",
+        "friend_since": 1377975049
+      },
+      {
+        "steamid": "76561197960789164",
+        "relationship": "friend",
+        "friend_since": 1708382848
+      },
+      {
+        "steamid": "76561197960944505",
+        "relationship": "friend",
+        "friend_since": 1346380854
+      },
+      {
+        "steamid": "76561197960966499",
+        "relationship": "friend",
+        "friend_since": 1711298476
+      },
+      {
+        "steamid": "76561197961056423",
+        "relationship": "friend",
+        "friend_since": 1570066381
+      },
+      {
+        "steamid": "76561197961322636",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197962105356",
+        "relationship": "friend",
+        "friend_since": 1570105720
+      },
+      {
+        "steamid": "76561197962532027",
+        "relationship": "friend",
+        "friend_since": 1711497922
+      },
+      {
+        "steamid": "76561197963455467",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197963588567",
+        "relationship": "friend",
+        "friend_since": 1375234020
+      },
+      {
+        "steamid": "76561197963727299",
+        "relationship": "friend",
+        "friend_since": 1376967378
+      },
+      {
+        "steamid": "76561197964137632",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197964139538",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197964270785",
+        "relationship": "friend",
+        "friend_since": 1244084915
+      },
+      {
+        "steamid": "76561197965747406",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197966582861",
+        "relationship": "friend",
+        "friend_since": 1243904666
+      },
+      {
+        "steamid": "76561197967320555",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968208959",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968297136",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968304048",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968309195",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968320134",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197968329871",
+        "relationship": "friend",
+        "friend_since": 1712454251
+      },
+      {
+        "steamid": "76561197968350171",
+        "relationship": "friend",
+        "friend_since": 1586829037
+      },
+      {
+        "steamid": "76561197968376977",
+        "relationship": "friend",
+        "friend_since": 1573694942
+      },
+      {
+        "steamid": "76561197968539435",
+        "relationship": "friend",
+        "friend_since": 1573918629
+      },
+      {
+        "steamid": "76561197968548062",
+        "relationship": "friend",
+        "friend_since": 1570200174
+      },
+      {
+        "steamid": "76561197968548668",
+        "relationship": "friend",
+        "friend_since": 1583714246
+      },
+      {
+        "steamid": "76561197968556120",
+        "relationship": "friend",
+        "friend_since": 1375869689
+      },
+      {
+        "steamid": "76561197969360136",
+        "relationship": "friend",
+        "friend_since": 1575839625
+      },
+      {
+        "steamid": "76561197969414826",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197969431241",
+        "relationship": "friend",
+        "friend_since": 1762557809
+      },
+      {
+        "steamid": "76561197969712129",
+        "relationship": "friend",
+        "friend_since": 1619138653
+      },
+      {
+        "steamid": "76561197970264962",
+        "relationship": "friend",
+        "friend_since": 1587147214
+      },
+      {
+        "steamid": "76561197970267160",
+        "relationship": "friend",
+        "friend_since": 1709356316
+      },
+      {
+        "steamid": "76561197970299350",
+        "relationship": "friend",
+        "friend_since": 1286924174
+      },
+      {
+        "steamid": "76561197970345381",
+        "relationship": "friend",
+        "friend_since": 1585399681
+      },
+      {
+        "steamid": "76561197970391250",
+        "relationship": "friend",
+        "friend_since": 1375543917
+      },
+      {
+        "steamid": "76561197970420825",
+        "relationship": "friend",
+        "friend_since": 1569970071
+      },
+      {
+        "steamid": "76561197970425681",
+        "relationship": "friend",
+        "friend_since": 1569959862
+      },
+      {
+        "steamid": "76561197970428514",
+        "relationship": "friend",
+        "friend_since": 1723496506
+      },
+      {
+        "steamid": "76561197970513701",
+        "relationship": "friend",
+        "friend_since": 1572753667
+      },
+      {
+        "steamid": "76561197970634000",
+        "relationship": "friend",
+        "friend_since": 1570105998
+      },
+      {
+        "steamid": "76561197970727118",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197970940554",
+        "relationship": "friend",
+        "friend_since": 1374292262
+      },
+      {
+        "steamid": "76561197971128183",
+        "relationship": "friend",
+        "friend_since": 1358042443
+      },
+      {
+        "steamid": "76561197972711113",
+        "relationship": "friend",
+        "friend_since": 1315356214
+      },
+      {
+        "steamid": "76561197972907863",
+        "relationship": "friend",
+        "friend_since": 1243734646
+      },
+      {
+        "steamid": "76561197974911855",
+        "relationship": "friend",
+        "friend_since": 1375660276
+      },
+      {
+        "steamid": "76561197975732862",
+        "relationship": "friend",
+        "friend_since": 1620827658
+      },
+      {
+        "steamid": "76561197976044688",
+        "relationship": "friend",
+        "friend_since": 1242996166
+      },
+      {
+        "steamid": "76561197976768407",
+        "relationship": "friend",
+        "friend_since": 1711311689
+      },
+      {
+        "steamid": "76561197977148133",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197977521796",
+        "relationship": "friend",
+        "friend_since": 1351882552
+      },
+      {
+        "steamid": "76561197977557064",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197978059589",
+        "relationship": "friend",
+        "friend_since": 1515773034
+      },
+      {
+        "steamid": "76561197978315069",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197981142432",
+        "relationship": "friend",
+        "friend_since": 1388436949
+      },
+      {
+        "steamid": "76561197983004631",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197983061833",
+        "relationship": "friend",
+        "friend_since": 1572737385
+      },
+      {
+        "steamid": "76561197985210129",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197992621785",
+        "relationship": "friend",
+        "friend_since": 1286909197
+      },
+      {
+        "steamid": "76561197992688984",
+        "relationship": "friend",
+        "friend_since": 1359418480
+      },
+      {
+        "steamid": "76561197992743506",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197992786140",
+        "relationship": "friend",
+        "friend_since": 1378176683
+      },
+      {
+        "steamid": "76561197992787402",
+        "relationship": "friend",
+        "friend_since": 0
+      },
+      {
+        "steamid": "76561197992847941",
+        "relationship": "friend",
+        "friend_since": 1348499249
+      },
+      {
+        "steamid": "76561197993231798",
+        "relationship": "friend",
+        "friend_since": 1708733882
+      },
+      {
+        "steamid": "76561197993318363",
+        "relationship": "friend",
+        "friend_since": 1375400195
+      },
+      {
+        "steamid": "76561197993588744",
+        "relationship": "friend",
+        "friend_since": 1292565977
+      },
+      {
+        "steamid": "76561197994266616",
+        "relationship": "friend",
+        "friend_since": 1708388307
+      },
+      {
+        "steamid": "76561197994730079",
+        "relationship": "friend",
+        "friend_since": 1292554965
+      },
+      {
+        "steamid": "76561197995501932",
+        "relationship": "friend",
+        "friend_since": 1572575133
+      },
+      {
+        "steamid": "76561198000190356",
+        "relationship": "friend",
+        "friend_since": 1606249978
+      },
+      {
+        "steamid": "76561198001943085",
+        "relationship": "friend",
+        "friend_since": 1570311219
+      },
+      {
+        "steamid": "76561198002823435",
+        "relationship": "friend",
+        "friend_since": 1286936866
+      },
+      {
+        "steamid": "76561198010071723",
+        "relationship": "friend",
+        "friend_since": 1570850398
+      },
+      {
+        "steamid": "76561198010759280",
+        "relationship": "friend",
+        "friend_since": 1576191994
+      },
+      {
+        "steamid": "76561198013759812",
+        "relationship": "friend",
+        "friend_since": 1291074693
+      },
+      {
+        "steamid": "76561198015155139",
+        "relationship": "friend",
+        "friend_since": 1349825742
+      },
+      {
+        "steamid": "76561198017048353",
+        "relationship": "friend",
+        "friend_since": 1584214723
+      },
+      {
+        "steamid": "76561198020017246",
+        "relationship": "friend",
+        "friend_since": 1744677873
+      },
+      {
+        "steamid": "76561198021015508",
+        "relationship": "friend",
+        "friend_since": 1273181275
+      },
+      {
+        "steamid": "76561198021531643",
+        "relationship": "friend",
+        "friend_since": 1574297975
+      },
+      {
+        "steamid": "76561198025339261",
+        "relationship": "friend",
+        "friend_since": 1624769838
+      },
+      {
+        "steamid": "76561198025403412",
+        "relationship": "friend",
+        "friend_since": 1607749521
+      },
+      {
+        "steamid": "76561198026534067",
+        "relationship": "friend",
+        "friend_since": 1761835031
+      },
+      {
+        "steamid": "76561198028245973",
+        "relationship": "friend",
+        "friend_since": 1589420385
+      },
+      {
+        "steamid": "76561198035407950",
+        "relationship": "friend",
+        "friend_since": 1584491897
+      },
+      {
+        "steamid": "76561198049286998",
+        "relationship": "friend",
+        "friend_since": 1713641257
+      },
+      {
+        "steamid": "76561198058778075",
+        "relationship": "friend",
+        "friend_since": 1614260925
+      },
+      {
+        "steamid": "76561198067305191",
+        "relationship": "friend",
+        "friend_since": 1576353125
+      },
+      {
+        "steamid": "76561198074378709",
+        "relationship": "friend",
+        "friend_since": 1760050186
+      },
+      {
+        "steamid": "76561198079697136",
+        "relationship": "friend",
+        "friend_since": 1573773188
+      },
+      {
+        "steamid": "76561198124688087",
+        "relationship": "friend",
+        "friend_since": 1598805097
+      },
+      {
+        "steamid": "76561198141107982",
+        "relationship": "friend",
+        "friend_since": 1587233913
+      },
+      {
+        "steamid": "76561198203129142",
+        "relationship": "friend",
+        "friend_since": 1746708799
+      },
+      {
+        "steamid": "76561198260328913",
+        "relationship": "friend",
+        "friend_since": 1585706840
+      },
+      {
+        "steamid": "76561198267771832",
+        "relationship": "friend",
+        "friend_since": 1450139875
+      },
+      {
+        "steamid": "76561198408009844",
+        "relationship": "friend",
+        "friend_since": 1622045048
+      },
+      {
+        "steamid": "76561198781170172",
+        "relationship": "friend",
+        "friend_since": 1570637094
+      },
+      {
+        "steamid": "76561198801548936",
+        "relationship": "friend",
+        "friend_since": 1587407670
+      },
+      {
+        "steamid": "76561198847504175",
+        "relationship": "friend",
+        "friend_since": 1569963496
+      },
+      {
+        "steamid": "76561198871452404",
+        "relationship": "friend",
+        "friend_since": 1761856391
+      },
+      {
+        "steamid": "76561198964862125",
+        "relationship": "friend",
+        "friend_since": 1740494261
+      },
+      {
+        "steamid": "76561198992048012",
+        "relationship": "friend",
+        "friend_since": 1573915541
+      },
+      {
+        "steamid": "76561199103901086",
+        "relationship": "friend",
+        "friend_since": 1615427895
+      },
+      {
+        "steamid": "76561199104826809",
+        "relationship": "friend",
+        "friend_since": 1619549209
+      },
+      {
+        "steamid": "76561199152883979",
+        "relationship": "friend",
+        "friend_since": 1618594752
+      },
+      {
+        "steamid": "76561199160854740",
+        "relationship": "friend",
+        "friend_since": 1618519445
+      },
+      {
+        "steamid": "76561199162688478",
+        "relationship": "friend",
+        "friend_since": 1618873588
+      },
+      {
+        "steamid": "76561199225489642",
+        "relationship": "friend",
+        "friend_since": 1761835320
+      }
+    ]
+  }
+}
