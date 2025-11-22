@@ -1,4 +1,4 @@
-# scripts/train_cf_als.py
+# CF/train_cf_als.py
 
 from pathlib import Path
 import pickle
@@ -7,11 +7,15 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 from scipy.sparse import coo_matrix
-import implicit
+import implicit  # ✅ required for ALS
 
 
 BASE = Path(__file__).resolve().parent.parent
-PROC = BASE / "steam_data" / "processed"
+
+# processed dir (Ludex/data/processed)
+PROC = BASE / "data" / "processed"
+PROC.mkdir(parents=True, exist_ok=True)
+
 INTERACTIONS_CSV = PROC / "user_game_playtime_top20.csv"
 
 # ---------------- CONFIG ----------------
@@ -26,16 +30,6 @@ RANDOM_STATE = 42
 def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
     """
     Load interactions and apply all filters, then factorize user & item IDs.
-
-    Returns
-    -------
-    df : DataFrame
-        Filtered interactions with columns:
-        ['steamid', 'appid', 'playtime_forever', 'user_idx', 'item_idx']
-    user_ids : Index
-        Mapping from user_idx -> original steamid
-    item_ids : Index
-        Mapping from item_idx -> original appid
     """
     print("Loading:", INTERACTIONS_CSV)
     try:
@@ -49,13 +43,11 @@ def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
     if df.empty:
         raise SystemExit("ERROR: interactions CSV is empty. Did the crawler run?")
 
-    # Collapse accidental duplicates (same user, same appid)
     df = (
         df.groupby(["steamid", "appid"], as_index=False)["playtime_forever"]
         .sum()
     )
 
-    # ---- BASIC FILTERS ----
     df = df[df["playtime_forever"] >= MIN_PLAYTIME]
     print("After MIN_PLAYTIME filter:", len(df))
     if df.empty:
@@ -64,7 +56,6 @@ def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
             "Consider lowering MIN_PLAYTIME or checking the crawl."
         )
 
-    # ---- ITEM POPULARITY FILTER (on raw IDs) ----
     item_user_counts = df.groupby("appid")["steamid"].nunique()
     valid_items = item_user_counts[item_user_counts >= MIN_USER_SUPPORT].index
     df = df[df["appid"].isin(valid_items)]
@@ -75,10 +66,8 @@ def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
             "Dataset is too sparse; consider lowering MIN_USER_SUPPORT."
         )
 
-    # Clean index so there are no "holes"
     df = df.reset_index(drop=True)
 
-    # ---- FINAL FACTORIZATION (only once, AFTER all filtering) ----
     df["user_idx"], user_ids = pd.factorize(df["steamid"])
     df["item_idx"], item_ids = pd.factorize(df["appid"])
 
@@ -95,7 +84,6 @@ def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
             f"(users={n_users}, items={n_items})."
         )
 
-    # Sanity: indices must be dense 0..n-1
     assert df["user_idx"].max() == n_users - 1
     assert df["item_idx"].max() == n_items - 1
 
@@ -105,22 +93,15 @@ def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
 def build_user_item_matrix(df: pd.DataFrame) -> coo_matrix:
     """
     Build user x item implicit-feedback matrix for ALS.
-
-    We use normalised playtime as a proxy for 'preference strength':
-    if a user plays game X a lot more than their other games, we give
-    a higher confidence weight to (user, X).
     """
-    # Normalise playtime per user to [0, 1]
     df["norm_playtime"] = df.groupby("user_idx")["playtime_forever"].transform(
         lambda x: x / x.max()
     )
 
-    # Log-scaled confidence (standard trick for implicit feedback)
     confidence = np.log1p(df["norm_playtime"] * 40).astype(np.float32)
 
-    # implicit ALS expects user_items: rows = users, cols = items
-    rows = df["user_idx"].astype(np.int32).values  # users
-    cols = df["item_idx"].astype(np.int32).values  # items
+    rows = df["user_idx"].astype(np.int32).values
+    cols = df["item_idx"].astype(np.int32).values
 
     n_users = df["user_idx"].nunique()
     n_items = df["item_idx"].nunique()
@@ -130,7 +111,6 @@ def build_user_item_matrix(df: pd.DataFrame) -> coo_matrix:
         shape=(n_users, n_items),
     ).tocsr()
 
-    # Extra sanity: matrix shape must match index ranges
     assert user_items.shape == (n_users, n_items)
 
     return user_items
@@ -139,11 +119,6 @@ def build_user_item_matrix(df: pd.DataFrame) -> coo_matrix:
 def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
     """
     Train implicit ALS collaborative filtering model.
-
-    This learns latent vectors for users and games such that:
-    - if user A plays games A & B
-    - and user B plays game A
-    -> their vectors end up close, and B will be recommended to B.
     """
     print("Training ALS...")
     model = implicit.als.AlternatingLeastSquares(
@@ -158,37 +133,25 @@ def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
 
 
 def main() -> None:
-    # 1) Load & filter interactions, factorize IDs
     df, user_ids, item_ids = load_and_filter()
-
-    # 2) Build user x item matrix
     user_items = build_user_item_matrix(df)
 
     n_users = user_items.shape[0]
     n_items = user_items.shape[1]
 
-    # 3) Train ALS CF model
     model = train_als(user_items)
 
-    # 4) Sanity checks: factors must match matrix dims
-    assert model.user_factors.shape[0] == n_users, (
-        f"Model users mismatch: model={model.user_factors.shape[0]}, "
-        f"expected={n_users}"
-    )
-    assert model.item_factors.shape[0] == n_items, (
-        f"Model items mismatch: model={model.item_factors.shape[0]}, "
-        f"expected={n_items}"
-    )
+    assert model.user_factors.shape[0] == n_users
+    assert model.item_factors.shape[0] == n_items
 
-    # 5) Save model + ID mappings for later recommendation
     with open(PROC / "cf_als_model.pkl", "wb") as f:
         pickle.dump(model, f)
 
     with open(PROC / "cf_als_index.pkl", "wb") as f:
         pickle.dump(
             {
-                "user_ids": list(user_ids),   # user_idx -> steamid
-                "item_ids": list(item_ids),   # item_idx -> appid
+                "user_ids": list(user_ids),
+                "item_ids": list(item_ids),
             },
             f,
         )

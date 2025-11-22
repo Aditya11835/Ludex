@@ -1,4 +1,4 @@
-# scripts/recommend_for_user.py
+# CF/recommend_for_user.py
 
 from pathlib import Path
 import os
@@ -10,14 +10,24 @@ import pickle
 from typing import Dict, List, Set, Tuple
 
 import pandas as pd
-import implicit
 import requests
+from dotenv import load_dotenv
 
 # ---------------- PATHS / CONSTANTS ----------------
 
+# CF/ -> Ludex/ (project root)
 BASE = Path(__file__).resolve().parent.parent
-PROC = BASE / "steam_data" / "processed"
-RAW_PLAYERS = BASE / "steam_data" / "raw" / "players"
+
+# Load .env from project root (Ludex/.env)
+ENV_PATH = BASE / ".env"
+load_dotenv(ENV_PATH)
+
+# processed data (Ludex/data/processed)
+PROC = BASE / "data" / "processed"
+PROC.mkdir(parents=True, exist_ok=True)
+
+# raw cache (Ludex/data/raw/players)
+RAW_PLAYERS = BASE / "data" / "raw" / "players"
 RAW_PLAYERS.mkdir(parents=True, exist_ok=True)
 
 MODEL_PATH = PROC / "cf_als_model.pkl"
@@ -27,7 +37,9 @@ INTERACTIONS_CSV = PROC / "user_game_playtime_top20.csv"
 GAMES_CSV = PROC / "games_all.csv"
 NAMES_CSV = PROC / "user_game_playtime_top20.csv"
 
-STEAM_API_KEY = os.environ.get("STEAM_API_KEY")
+# Steam API Key loaded from .env
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")
+
 FRIENDS_URL = "https://api.steampowered.com/ISteamUser/GetFriendList/v1/"
 OWNED_URL = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
 REQUEST_DELAY = 0.5  # seconds between live API calls (polite)
@@ -218,7 +230,6 @@ def build_appid_to_name(appids: List[int]) -> Dict[int, str]:
                 if nm:
                     appid_to_name[appid] = nm
         except Exception:
-            # if this fails, we will still fallback to "Unknown app <id>"
             continue
 
     return appid_to_name
@@ -275,7 +286,7 @@ def ensure_users_in_data_and_retrain(steamids: List[str]) -> None:
         owned_json = fetch_owned_games(sid)
         rows = select_top_games_from_json(owned_json, top_n=20)
         for r in rows:
-            r["steamid"] = sid  # ensure correct id
+            r["steamid"] = sid
         new_rows.extend(rows)
 
     if not new_rows:
@@ -303,12 +314,7 @@ def recommend_with_model(
     num_recs: int,
     friends_owned: Set[int],
 ) -> List[Tuple[int, float]]:
-    """
-    ALS-based recommendations with friend weighting:
-      - 75% from games that appear in friends' libraries
-      - 25% from other games (semi-random from candidate pool)
-      - Never recommend games in owned_appids_all
-    """
+
     total_items = len(item_ids)
     raw_N = num_recs + len(owned_appids_all) + 200
     raw_N = min(raw_N, total_items)
@@ -329,7 +335,6 @@ def recommend_with_model(
             continue
         appid = int(item_ids[item_idx])
 
-        # NEW: never recommend games the user owns (even if not in training CSV)
         if appid in owned_appids_all:
             continue
 
@@ -342,19 +347,15 @@ def recommend_with_model(
         else:
             other_candidates.append((appid, adj_score))
 
-    # sort by adjusted score
     friend_candidates.sort(key=lambda x: x[1], reverse=True)
     other_candidates.sort(key=lambda x: x[1], reverse=True)
 
-    # target split
     n_from_friends = max(1, int(round(num_recs * 0.75)))
     n_from_friends = min(n_from_friends, num_recs)
     n_from_random = num_recs - n_from_friends
 
-    # 75%: top from friend-owned games
     chosen: List[Tuple[int, float]] = friend_candidates[:n_from_friends]
 
-    # 25%: random-ish from others (sample from top K to keep quality)
     if n_from_random > 0 and other_candidates:
         top_k = min(100, len(other_candidates))
         pool = other_candidates[:top_k]
@@ -363,7 +364,6 @@ def recommend_with_model(
         else:
             chosen.extend(random.sample(pool, n_from_random))
 
-    # if still short, fill from remaining best
     if len(chosen) < num_recs:
         remaining = num_recs - len(chosen)
         chosen_ids = {a for a, _ in chosen}
@@ -380,10 +380,7 @@ def cold_start_random_from_users(
     num_recs: int,
     seed_users_count: int = 60,
 ) -> List[int]:
-    """
-    Case 2: user has no games and no friends.
-    Choose random ~60 users, union their libraries, and recommend random games.
-    """
+
     all_users = df["steamid"].unique().tolist()
     if not all_users:
         return []
@@ -403,14 +400,11 @@ def cold_start_random_from_users(
 def main(steamid_str: str, num_recs: int = 10) -> None:
     steamid_str = str(steamid_str)
 
-    # Step 0: fetch friends from Steam (even if they aren't in data yet)
     friends = fetch_friends(steamid_str)
     has_friends = len(friends) > 0
 
-    # Step 1: ensure user + friends exist in interactions CSV & model (rules 3 & 4)
     ensure_users_in_data_and_retrain([steamid_str] + friends)
 
-    # Reload interactions + model after potential retrain
     df = load_interactions()
     owned_map, pop_norm = load_user_owned_and_popularity(df)
 
@@ -428,10 +422,8 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
     steamid_to_idx = {sid: i for i, sid in enumerate(user_ids)}
     in_model = steamid_str in steamid_to_idx
 
-    # Training-based ownership
     owned_appids_training = owned_map.get(steamid_str, set())
 
-    # Extra: full ownership via API (so we don't recommend already-owned games)
     owned_appids_api: Set[int] = set()
     owned_json = fetch_owned_games(steamid_str)
     if has_public_games(owned_json):
@@ -445,7 +437,6 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
     owned_appids_all = owned_appids_training | owned_appids_api
     has_games = len(owned_appids_all) > 0
 
-    # ---------------- CASE 2: no games & no friends ----------------
     if not has_games and not has_friends:
         print(f"User {steamid_str} has no games and no friends in Steam (fresh account).")
         appids = cold_start_random_from_users(df, num_recs=num_recs, seed_users_count=60)
@@ -458,7 +449,6 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
             print(f"{rank:2d}. {name} (appid {appid}) — [cold start random]")
         return
 
-    # If user isn't in model even after attempt to add → cold-ish fallback
     if not in_model:
         print(f"User {steamid_str} is not in ALS model even after enrichment; "
               f"falling back to cold-start from users.")
@@ -469,26 +459,25 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
             print(f"{rank:2d}. {name} (appid {appid}) — [cold start fallback]")
         return
 
-    # ---------------- CASE 1: user has games and/or friends → main CF ----------------
     user_idx = steamid_to_idx[steamid_str]
     print(f"Recommendations for user {steamid_str} (index {user_idx}).")
+
     if has_games:
         print(f"- User has {len(owned_appids_all)} games (API + training).")
     else:
         print("- User has no games in API/training data (but has friends).")
+
     if has_friends:
         print(f"- User has {len(friends)} Steam friends (API).")
     else:
         print("- User has no friends (or friend list is private).")
 
-    # Friends' owned games set (only those present in our data)
     friends_owned: Set[int] = set()
     for fid in friends:
         games = owned_map.get(str(fid))
         if games:
             friends_owned.update(games)
 
-    # If no friends-owned data at all, fall back to plain CF (still filters owned_appids_all)
     if not friends_owned:
         print("No friends with games in training data; falling back to plain CF.")
         total_items = len(item_ids)
@@ -519,7 +508,6 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
         top = candidates[:num_recs]
         top_appids = [appid for appid, _ in top]
     else:
-        # Use new 75% friend / 25% random logic
         top = recommend_with_model(
             model=model,
             item_ids=item_ids,
@@ -531,7 +519,6 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
         )
         top_appids = [appid for appid, _ in top]
 
-    # Pretty print with real names (no "Unknown app" if we can help it)
     appid_to_name = build_appid_to_name(top_appids)
     for rank, (appid, score) in enumerate(top, start=1):
         name = appid_to_name.get(appid, f"Unknown app {appid}")
