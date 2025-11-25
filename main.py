@@ -1,4 +1,5 @@
 import os
+import argparse
 from dotenv import load_dotenv
 
 import numpy as np
@@ -15,7 +16,6 @@ from CBF.catalogue_update import ensure_user_games_in_catalogue_and_refresh
 
 # ======================================================
 # CONFIG
-# ======================================================
 
 TOP_N = 20
 MIN_PLAYTIME = 60          # Minimum minutes for an owned game to count strongly
@@ -26,7 +26,6 @@ LAMBDA_MMR = 0.7           # Relevance vs diversity in MMR
 
 # ======================================================
 # HYBRID HOOKS (CBF + CF) – NOT USED YET, FOR FUTURE CF
-# ======================================================
 
 def normalise_scores(scores: np.ndarray) -> np.ndarray:
     """
@@ -86,16 +85,14 @@ def combine_cbf_cf(
 
 # ======================================================
 # MAIN
-# ======================================================
 
-def main():
+def main(steamid64: str):
     load_dotenv()
     api_key = os.getenv("STEAM_API_KEY")
     if not api_key:
         raise RuntimeError("STEAM_API_KEY not found in .env")
 
-    # Ask for SteamID64
-    steamid64 = input("Enter your SteamID64: ").strip()
+    steamid64 = steamid64.strip()
     if not steamid64:
         raise RuntimeError("SteamID64 is required")
 
@@ -215,4 +212,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Ludex CBF recommender (TF-IDF + anchors + MMR)."
+    )
+    parser.add_argument(
+        "steamid64",
+        help="SteamID64 of the user to recommend games for.",
+    )
+    args = parser.parse_args()
+
+    main(args.steamid64)
