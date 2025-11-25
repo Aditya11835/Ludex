@@ -4,28 +4,21 @@ from dotenv import load_dotenv
 
 import numpy as np
 
-from CBF.cbf_model import load_catalogue_and_features
-from CBF.user import (
-    fetch_owned_games,
-    map_owned_to_indices,
-    build_user_content_profile,
-    recommend_cbf_user_plus_anchors_mmr,
-)
-from CBF.catalogue_update import ensure_user_games_in_catalogue_and_refresh
+from CBF.CBF_recommend import generate_cbf_recommendations
 
 
 # ======================================================
-# CONFIG
+# CONFIG (kept in main because they may affect hybrid)
 
 TOP_N = 20
 MIN_PLAYTIME = 60          # Minimum minutes for an owned game to count strongly
-CANDIDATE_POOL_SIZE = 500  # How many top-CBF games to consider before MMR
+CANDIDATE_POOL_SIZE = 1000  # How many top-CBF games to consider before MMR
 BETA_ANCHOR_BLEND = 0.3    # Weight for anchor_soft vs global CBF
 LAMBDA_MMR = 0.7           # Relevance vs diversity in MMR
 
 
 # ======================================================
-# HYBRID HOOKS (CBF + CF) – NOT USED YET, FOR FUTURE CF
+# HYBRID HOOKS (CBF + CF) – CF not plugged in yet
 
 def normalise_scores(scores: np.ndarray) -> np.ndarray:
     """
@@ -97,81 +90,27 @@ def main(steamid64: str):
         raise RuntimeError("SteamID64 is required")
 
     # --------------------------------------------------
-    # 1) Load catalogue + sparse, L2-normalised feature matrix
-    df, full_matrix_norm = load_catalogue_and_features()
-
-    # --------------------------------------------------
-    # 2) Fetch owned games from Steam
-    owned_df = fetch_owned_games(steamid64, api_key)
-    if owned_df.empty:
-        print("\nNo visible games for this user – cannot build a content profile.")
-        return
-
-    # --------------------------------------------------
-    # 3) Ensure all owned games exist in the catalogue; if not, extend catalogue
-    #    and rebuild the feature matrix BEFORE building the user profile.
-    print("\nChecking for owned games missing from the catalogue…")
-    df, full_matrix_norm = ensure_user_games_in_catalogue_and_refresh(
-        owned_df=owned_df,
-        catalogue_df=df,
-    )
-
-    # After this point, df and full_matrix_norm are guaranteed to include
-    # ALL games from owned_df (if metadata could be fetched).
-
-    # --------------------------------------------------
-    # 4) Map owned games to indices in the (potentially updated) catalogue
-    owned_mapped = map_owned_to_indices(owned_df, df)
-    if owned_mapped.empty:
-        print("\nNone of the user's games exist in the catalogue even after update.")
-        return
-
-    # --------------------------------------------------
-    # 5) Build a single user content profile vector
-    print("\nBuilding user content profile (single vector in TF–IDF space)…")
-    user_vec = build_user_content_profile(
-        owned_mapped=owned_mapped,
-        full_matrix_norm=full_matrix_norm,
-        min_playtime=MIN_PLAYTIME,
-    )
-
-    if user_vec is None:
-        print(
-            "\nCould not build a content-based profile (cold-start or degenerate case). "
-            "In a future hybrid system, you would fall back to CF/popularity here."
-        )
-        return
-
-    # --------------------------------------------------
-    # 6) Generate CBF recommendations using:
-    #    - global user vector
-    #    - anchor-based soft similarity
-    #    - MMR diversity re-ranking
-    print(
-        "\nScoring games via global user vector + anchor soft scores + MMR "
-        "(CBF-only for now, hybrid-ready)…"
-    )
-
-    recs = recommend_cbf_user_plus_anchors_mmr(
-        catalogue_df=df,
-        full_matrix_norm=full_matrix_norm,
-        owned_mapped=owned_mapped,
-        user_vec=user_vec,
+    # 1) Run the CBF-only pipeline to get recommendations
+    recs = generate_cbf_recommendations(
+        steamid64=steamid64,
+        api_key=api_key,
         top_n=TOP_N,
-        candidate_pool_size=CANDIDATE_POOL_SIZE,
         min_playtime=MIN_PLAYTIME,
-        beta=BETA_ANCHOR_BLEND,
+        candidate_pool_size=CANDIDATE_POOL_SIZE,
+        beta_anchor_blend=BETA_ANCHOR_BLEND,
         lambda_mmr=LAMBDA_MMR,
     )
 
     if recs.empty:
-        print("\nNo recommendations generated.")
+        print("\nNo content-based recommendations generated for this user.")
+        # In a future hybrid system, you can fall back to CF/popularity here.
         return
 
     # --------------------------------------------------
-    # 7) (Optional, future) integrate CF here
+    # 2) (Optional, future) integrate CF here.
+    #
     # For now, treat `cbf_anchor_combined` as the CBF signal.
-    # Once CF is available, you can:
+    # Once CF is available, you can do something like:
     #
     #   cf_scores_for_recs = ...
     #   recs['hybrid_score'] = combine_cbf_cf(
@@ -180,7 +119,6 @@ def main(steamid64: str):
     #       alpha=0.5,
     #   )
     #
-    # For now, hybrid_score = cbf_anchor_combined.
     recs = recs.copy()
     if "cbf_anchor_combined" in recs.columns:
         recs["hybrid_score"] = recs["cbf_anchor_combined"]
@@ -189,8 +127,8 @@ def main(steamid64: str):
         recs["hybrid_score"] = recs.get("cbf", 0.0)
 
     # --------------------------------------------------
-    # 8) Display results
-    print("\nTop Recommendations (currently CBF-only; hybrid + auto-catalogue-ready):")
+    # 3) Display results
+    print("\nTop Recommendations (currently CBF-only; hybrid-ready):")
     for _, row in recs.iterrows():
         cbf_val = row.get("cbf", np.nan)
         hybrid_val = row.get("hybrid_score", np.nan)
@@ -213,7 +151,7 @@ def main(steamid64: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Ludex CBF recommender (TF-IDF + anchors + MMR)."
+        description="Ludex CBF recommender (TF-IDF + anchors + MMR, hybrid-ready)."
     )
     parser.add_argument(
         "steamid64",
