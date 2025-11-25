@@ -210,7 +210,7 @@ def build_appid_to_name(appids: List[int]) -> Dict[int, str]:
                     if nm:
                         appid_to_name[appid] = nm
         except Exception as e:
-            print(f"WARNING: failed to read {NAMES_CSV}: {e}")
+            print(f"WARNING: failed to read NAMES_CSV: {e}")
 
     # 3) final fallback: Steam Store API for remaining ids
     still_missing = [a for a in appids if a not in appid_to_name]
@@ -300,9 +300,9 @@ def ensure_users_in_data_and_retrain(steamids: List[str]) -> None:
     df_new.to_csv(INTERACTIONS_CSV, index=False)
     print(f"Appended {len(new_rows)} new interaction rows. Retraining model...")
 
-    # import the modular trainer (expects train_cf_als.py to expose train_cf_model())
-    from train_cf_als import train_cf_model
-    train_cf_model()
+    # use modular trainer: force_retrain=True to overwrite old .pkl files
+    from train_cf_als import train_and_save_model
+    train_and_save_model(force_retrain=True)
     print("Retrain complete.")
 
 
@@ -416,9 +416,10 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
 
     # --- Initial training if model/index missing ---
     if (not MODEL_PATH.exists()) or (not INDEX_PATH.exists()):
-        print("CF model/index not found. Training ALS from scratch via train_cf_als.train_cf_model() ...")
-        from train_cf_als import train_cf_model
-        train_cf_model()
+        print("CF model/index not found. Training ALS from scratch via train_cf_als.train_and_save_model() ...")
+        from train_cf_als import train_and_save_model
+        # force_retrain=False is enough here; files don't exist anyway
+        train_and_save_model(force_retrain=False)
         print("Initial CF model trained.\n")
 
     # Enrich interactions with this user + friends and retrain only if needed

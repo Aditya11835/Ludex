@@ -14,9 +14,10 @@ Public API:
     model, user_ids, item_ids = train_and_save_model()
 
 Behavior:
-    - If cf_als_model.pkl and cf_als_index.pkl already exist:
+    - If cf_als_model.pkl and cf_als_index.pkl already exist AND
+      force_retrain=False:
         → load them from data/processed and return.
-    - If they do NOT exist:
+    - If they do NOT exist, or force_retrain=True:
         → train ALS from data/raw/user_game_playtime_top20.csv,
           save model + index into data/processed, and return them.
 
@@ -196,15 +197,22 @@ def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
 # ======================================================
 # PUBLIC API: TRAIN + SAVE OR LOAD
 
-def train_and_save_model():
+def train_and_save_model(force_retrain: bool = False):
     """
     Public helper for CF module users (e.g., recommend_for_user.py).
 
     Behavior:
-        - If cf_als_model.pkl and cf_als_index.pkl both exist:
+        - If force_retrain is False AND cf_als_model.pkl AND cf_als_index.pkl
+          both exist:
               → load and return (model, user_ids, item_ids).
-        - Otherwise:
+        - Otherwise (no existing model/index OR force_retrain=True):
               → train ALS from CSV, save model+index, then return them.
+
+    Parameters
+    ----------
+    force_retrain : bool, default False
+        If True, ignore any existing saved model/index and retrain from
+        the current interactions CSV, overwriting the .pkl files.
 
     Returns
     -------
@@ -212,8 +220,8 @@ def train_and_save_model():
     user_ids : list[str]
     item_ids : list[int]
     """
-    # If model + index already exist, just load them
-    if MODEL_PATH.exists() and INDEX_PATH.exists():
+    # Decide whether to load or train
+    if (not force_retrain) and MODEL_PATH.exists() and INDEX_PATH.exists():
         print("[Ludex CF] Found existing CF model + index. Loading from disk…")
         with open(MODEL_PATH, "rb") as f:
             model = pickle.load(f)
@@ -224,13 +232,17 @@ def train_and_save_model():
         item_ids = list(idx["item_ids"])
         return model, user_ids, item_ids
 
-    # Otherwise, run full training
-    print("[Ludex CF] No existing CF model found. Training from scratch…")
+    print(
+        "[Ludex CF] "
+        + ("Force retrain requested." if force_retrain else "No existing CF model found.")
+        + " Training from scratch…"
+    )
+
     df, user_ids_idx, item_ids_idx = load_and_filter()
     user_items = build_user_item_matrix(df)
     model = train_als(user_items)
 
-    # Save model + index
+    # Save model + index (overwrite if already present)
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
 
