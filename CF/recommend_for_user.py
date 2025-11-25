@@ -268,6 +268,8 @@ def ensure_users_in_data_and_retrain(steamids: List[str]) -> None:
       - fetch owned games (top 20, public only)
       - append to CSV
     If any rows were added, retrain ALS once.
+
+    This function assumes the base CF model/index already exist.
     """
     if not STEAM_API_KEY:
         print("STEAM_API_KEY not set; cannot auto-add new users.")
@@ -404,14 +406,33 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
     friends = fetch_friends(steamid_str)
     has_friends = len(friends) > 0
 
-    # enrich interactions + retrain if needed
+    # Ensure interactions CSV exists (crawler must have run)
+    if not INTERACTIONS_CSV.exists():
+        raise SystemExit(
+            f"Interactions file not found: {INTERACTIONS_CSV}\n"
+            f"Run the crawler first to create it."
+        )
+
+    # --- NEW BEHAVIOR: initial training if model/index missing ---
+    if (not MODEL_PATH.exists()) or (not INDEX_PATH.exists()):
+        print("CF model/index not found. Training ALS from scratch using train_cf_als.py ...")
+        from train_cf_als import main as train_cf_main
+        train_cf_main()
+        print("Initial CF model trained.\n")
+
+    # Enrich interactions with this user + friends and retrain only if needed
     ensure_users_in_data_and_retrain([steamid_str] + friends)
 
+    # Reload interactions after possible enrichment
     df = load_interactions()
     owned_map, pop_norm = load_user_owned_and_popularity(df)
 
+    # Safety: model/index MUST exist now
     if not MODEL_PATH.exists() or not INDEX_PATH.exists():
-        raise SystemExit("Model or index file not found. Run train_cf_als.py first.")
+        raise SystemExit(
+            "Model or index file not found even after training.\n"
+            "Check train_cf_als.py and your data setup."
+        )
 
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
