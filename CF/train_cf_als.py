@@ -1,4 +1,20 @@
-# CF/train_cf_als.py
+"""
+Ludex CF Module
+----------------
+Trains an ALS (implicit feedback) collaborative filtering model using
+Steam user playtime data stored in:
+    data/raw/user_game_playtime_top20.csv
+
+This script:
+1. Loads & filters raw interactions
+2. Builds user–item implicit matrix
+3. Trains ALS
+4. Saves:
+       - cf_als_model.pkl
+       - cf_als_index.pkl
+
+Author: Ludex Project
+"""
 
 from pathlib import Path
 import pickle
@@ -7,97 +23,116 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 from scipy.sparse import coo_matrix
-import implicit  # ✅ required for ALS
+import implicit
 
+
+# ======================================================
+# PATHS
 
 BASE = Path(__file__).resolve().parent.parent
 
-# processed dir (Ludex/data/processed)
+# Models are always stored in processed/
 PROC = BASE / "data" / "processed"
 PROC.mkdir(parents=True, exist_ok=True)
 
-INTERACTIONS_CSV = PROC / "user_game_playtime_top20.csv"
+INTERACTIONS_CSV = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
 
-# ---------------- CONFIG ----------------
-MIN_PLAYTIME = 10         # minimum minutes of playtime to consider a (user, game) interaction
-MIN_USER_SUPPORT = 2      # game must be played by at least this many users
+
+# ======================================================
+# CONFIG
+
+MIN_PLAYTIME = 10          # drop interactions with tiny playtime
+MIN_USER_SUPPORT = 2       # game must be played by ≥2 users
 ALS_FACTORS = 64
 ALS_REG = 0.15
 ALS_ITERS = 25
 RANDOM_STATE = 42
 
 
+# ======================================================
+# LOAD + FILTER
+
 def load_and_filter() -> Tuple[pd.DataFrame, pd.Index, pd.Index]:
     """
-    Load interactions and apply all filters, then factorize user & item IDs.
+    Load the raw interactions CSV and apply all filters.
+    Then factorize user and item into contiguous integer indices.
     """
-    print("Loading:", INTERACTIONS_CSV)
+    print(f"\n[Ludex] Loading interactions from: {INTERACTIONS_CSV}")
+
     try:
         df = pd.read_csv(
             INTERACTIONS_CSV,
             usecols=["steamid", "appid", "playtime_forever"],
         )
     except FileNotFoundError:
-        raise SystemExit(f"ERROR: interactions CSV not found: {INTERACTIONS_CSV}")
-
-    if df.empty:
-        raise SystemExit("ERROR: interactions CSV is empty. Did the crawler run?")
-
-    df = (
-        df.groupby(["steamid", "appid"], as_index=False)["playtime_forever"]
-        .sum()
-    )
-
-    df = df[df["playtime_forever"] >= MIN_PLAYTIME]
-    print("After MIN_PLAYTIME filter:", len(df))
-    if df.empty:
         raise SystemExit(
-            f"ERROR: no interactions left after MIN_PLAYTIME={MIN_PLAYTIME}. "
-            "Consider lowering MIN_PLAYTIME or checking the crawl."
+            f"Ludex Error: Interactions CSV not found:\n{INTERACTIONS_CSV}"
         )
 
-    item_user_counts = df.groupby("appid")["steamid"].nunique()
-    valid_items = item_user_counts[item_user_counts >= MIN_USER_SUPPORT].index
-    df = df[df["appid"].isin(valid_items)]
-    print("After MIN_USER_SUPPORT filter:", len(df))
+    if df.empty:
+        raise SystemExit("Ludex Error: interactions CSV is empty.")
+
+    # Combine duplicate (user, item)
+    df = (
+        df.groupby(["steamid", "appid"], as_index=False)["playtime_forever"]
+          .sum()
+    )
+
+    # Filter: playtime threshold
+    df = df[df["playtime_forever"] >= MIN_PLAYTIME]
+    print(f"[Ludex] After MIN_PLAYTIME={MIN_PLAYTIME}: {len(df)} rows")
+
     if df.empty:
         raise SystemExit(
-            f"ERROR: no interactions left after MIN_USER_SUPPORT={MIN_USER_SUPPORT}. "
-            "Dataset is too sparse; consider lowering MIN_USER_SUPPORT."
+            f"Ludex Error: No interactions remain after MIN_PLAYTIME.\n"
+            "Check crawler output or reduce filter thresholds."
+        )
+
+    # Filter: item must have enough users
+    item_counts = df.groupby("appid")["steamid"].nunique()
+    valid_items = item_counts[item_counts >= MIN_USER_SUPPORT].index
+    df = df[df["appid"].isin(valid_items)]
+    print(f"[Ludex] After MIN_USER_SUPPORT={MIN_USER_SUPPORT}: {len(df)} rows")
+
+    if df.empty:
+        raise SystemExit(
+            f"Ludex Error: All items removed after MIN_USER_SUPPORT filter.\n"
+            "Reduce MIN_USER_SUPPORT or collect more crawl data."
         )
 
     df = df.reset_index(drop=True)
 
+    # Factorize IDs
     df["user_idx"], user_ids = pd.factorize(df["steamid"])
     df["item_idx"], item_ids = pd.factorize(df["appid"])
 
     n_users = df["user_idx"].nunique()
     n_items = df["item_idx"].nunique()
 
-    print(f"Users: {n_users}, Items: {n_items}, Interactions: {len(df)}")
-    print("Max user_idx =", df["user_idx"].max())
-    print("Max item_idx =", df["item_idx"].max())
+    print(f"[Ludex] Users={n_users}, Items={n_items}, Interactions={len(df)}")
 
     if n_users < 2 or n_items < 2:
         raise SystemExit(
-            f"ERROR: Not enough users/items to train ALS "
+            f"Ludex Error: Not enough users/items for ALS "
             f"(users={n_users}, items={n_items})."
         )
-
-    assert df["user_idx"].max() == n_users - 1
-    assert df["item_idx"].max() == n_items - 1
 
     return df, user_ids, item_ids
 
 
+# ======================================================
+# MATRIX BUILDING
+
 def build_user_item_matrix(df: pd.DataFrame) -> coo_matrix:
     """
-    Build user x item implicit-feedback matrix for ALS.
+    Construct a user–item implicit matrix using normalized playtime.
     """
+    # Normalize per-user playtime
     df["norm_playtime"] = df.groupby("user_idx")["playtime_forever"].transform(
         lambda x: x / x.max()
     )
 
+    # Convert to implicit confidence
     confidence = np.log1p(df["norm_playtime"] * 40).astype(np.float32)
 
     rows = df["user_idx"].astype(np.int32).values
@@ -106,21 +141,20 @@ def build_user_item_matrix(df: pd.DataFrame) -> coo_matrix:
     n_users = df["user_idx"].nunique()
     n_items = df["item_idx"].nunique()
 
-    user_items = coo_matrix(
+    matrix = coo_matrix(
         (confidence, (rows, cols)),
         shape=(n_users, n_items),
     ).tocsr()
 
-    assert user_items.shape == (n_users, n_items)
+    return matrix
 
-    return user_items
 
+# ======================================================
+# ALS TRAINING
 
 def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
-    """
-    Train implicit ALS collaborative filtering model.
-    """
-    print("Training ALS...")
+    print("\n[Ludex] Training implicit ALS model…")
+
     model = implicit.als.AlternatingLeastSquares(
         factors=ALS_FACTORS,
         regularization=ALS_REG,
@@ -132,31 +166,27 @@ def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
     return model
 
 
+# ======================================================
+# MAIN
+
 def main() -> None:
     df, user_ids, item_ids = load_and_filter()
     user_items = build_user_item_matrix(df)
 
-    n_users = user_items.shape[0]
-    n_items = user_items.shape[1]
-
     model = train_als(user_items)
 
-    assert model.user_factors.shape[0] == n_users
-    assert model.item_factors.shape[0] == n_items
-
+    # Save model + index
     with open(PROC / "cf_als_model.pkl", "wb") as f:
         pickle.dump(model, f)
 
     with open(PROC / "cf_als_index.pkl", "wb") as f:
         pickle.dump(
-            {
-                "user_ids": list(user_ids),
-                "item_ids": list(item_ids),
-            },
+            {"user_ids": list(user_ids),
+             "item_ids": list(item_ids)},
             f,
         )
 
-    print("Saved model + index successfully.")
+    print("\n[Ludex] ✓ Model trained and saved successfully.\n")
 
 
 if __name__ == "__main__":

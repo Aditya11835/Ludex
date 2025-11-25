@@ -1,5 +1,3 @@
-# CF/recommend_for_user.py
-
 from pathlib import Path
 import os
 import sys
@@ -22,7 +20,7 @@ BASE = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE / ".env"
 load_dotenv(ENV_PATH)
 
-# processed data (Ludex/data/processed)
+# processed data (Ludex/data/processed) – for model + index only
 PROC = BASE / "data" / "processed"
 PROC.mkdir(parents=True, exist_ok=True)
 
@@ -33,17 +31,17 @@ RAW_PLAYERS.mkdir(parents=True, exist_ok=True)
 MODEL_PATH = PROC / "cf_als_model.pkl"
 INDEX_PATH = PROC / "cf_als_index.pkl"
 
-INTERACTIONS_CSV = PROC / "user_game_playtime_top20.csv"
-GAMES_CSV = PROC / "games_all.csv"
-NAMES_CSV = PROC / "user_game_playtime_top20.csv"
+INTERACTIONS_CSV = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
+GAMES_CSV        = BASE / "data" / "raw" / "game_details.csv"
+NAMES_CSV        = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
 
 # Steam API Key loaded from .env
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 
 FRIENDS_URL = "https://api.steampowered.com/ISteamUser/GetFriendList/v1/"
-OWNED_URL = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
+OWNED_URL   = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
 REQUEST_DELAY = 0.5  # seconds between live API calls (polite)
-STORE_URL = "https://store.steampowered.com/api/appdetails"
+STORE_URL   = "https://store.steampowered.com/api/appdetails"
 
 
 # ---------------- SMALL UTILITIES ----------------
@@ -174,30 +172,31 @@ def select_top_games_from_json(owned_json, top_n: int = 20):
 
 def build_appid_to_name(appids: List[int]) -> Dict[int, str]:
     """
-    Fast mapping from appid -> name.
+    Fast mapping from appid -> name/title.
 
-    1) Use local CSVs (games_all.csv, then interactions CSV).
+    1) Use local CSVs (game_details.csv, then interactions CSV).
     2) For any remaining 'unknown' appids, query the Steam Store API
        once per app (only for this small set of recommended games).
     """
     appids = [int(a) for a in appids]
     appid_to_name: Dict[int, str] = {}
 
-    # 1) games_all.csv if available
+    # 1) game_details.csv if available
     if GAMES_CSV.exists():
         try:
-            games = pd.read_csv(GAMES_CSV, usecols=["appid", "name"])
+            # game_details.csv: appid,title,developers,publishers,genres,tags,description
+            games = pd.read_csv(GAMES_CSV, usecols=["appid", "title"])
             games["appid"] = games["appid"].astype(int)
             sub = games[games["appid"].isin(appids)]
             for _, row in sub.iterrows():
                 appid = int(row["appid"])
-                nm = str(row["name"]) if pd.notna(row["name"]) else ""
+                nm = str(row["title"]) if pd.notna(row["title"]) else ""
                 if nm:
                     appid_to_name[appid] = nm
         except Exception as e:
             print(f"WARNING: failed to read {GAMES_CSV}: {e}")
 
-    # 2) fallback: names from interactions CSV (if it has a name column)
+    # 2) fallback: names from interactions CSV
     missing = [a for a in appids if a not in appid_to_name]
     if missing and NAMES_CSV.exists():
         try:
@@ -213,7 +212,7 @@ def build_appid_to_name(appids: List[int]) -> Dict[int, str]:
         except Exception as e:
             print(f"WARNING: failed to read {NAMES_CSV}: {e}")
 
-    # 3) For any remaining unknowns, hit the Steam Store API (small set only)
+    # 3) final fallback: Steam Store API for remaining ids
     still_missing = [a for a in appids if a not in appid_to_name]
     for appid in still_missing:
         try:
@@ -295,6 +294,7 @@ def ensure_users_in_data_and_retrain(steamids: List[str]) -> None:
 
     df_new = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
     df_new.drop_duplicates(subset=["steamid", "appid"], inplace=True)
+    # writes back to data/raw/user_game_playtime_top20.csv
     df_new.to_csv(INTERACTIONS_CSV, index=False)
     print(f"Appended {len(new_rows)} new interaction rows. Retraining model...")
 
@@ -400,9 +400,11 @@ def cold_start_random_from_users(
 def main(steamid_str: str, num_recs: int = 10) -> None:
     steamid_str = str(steamid_str)
 
+    # friends from API
     friends = fetch_friends(steamid_str)
     has_friends = len(friends) > 0
 
+    # enrich interactions + retrain if needed
     ensure_users_in_data_and_retrain([steamid_str] + friends)
 
     df = load_interactions()
