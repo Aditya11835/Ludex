@@ -41,7 +41,7 @@ INTERACTIONS_CSV = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
 # ======================================================
 # CONFIG
 
-MIN_PLAYTIME = 10          # drop interactions with tiny playtime
+MIN_PLAYTIME = 60         # drop interactions with tiny playtime
 MIN_USER_SUPPORT = 2       # game must be played by ≥2 users
 ALS_FACTORS = 64
 ALS_REG = 0.15
