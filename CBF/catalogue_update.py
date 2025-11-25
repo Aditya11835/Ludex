@@ -14,7 +14,7 @@ import undetected_chromedriver as uc
 
 from scipy.sparse import save_npz, load_npz
 
-from .model import (
+from .cbf_model import (
     INPUT_CSV,            # data/raw/game_details.csv
     FEATURE_MATRIX_NPZ,   # data/processed/recommender_matrix.npz
     build_feature_matrix,

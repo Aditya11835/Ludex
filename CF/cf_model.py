@@ -1,17 +1,19 @@
 """
-Ludex CF Training Module
-------------------------
+Ludex CF Model Module
+---------------------
 
-Trains an ALS (implicit feedback) collaborative filtering model using
-Steam user playtime data stored in:
-    data/raw/user_game_playtime_top20.csv
+Analogous to `recommender/model.py` on the CBF side.
 
-This file is intended to be imported, not run as a script.
+Responsibilities:
+    - Load & filter the interactions CSV
+    - Build the user–item implicit feedback matrix
+    - Train ALS
+    - Save / load the ALS model and ID index
 
 Public API:
-    from train_cf_als import train_and_save_model
+    from cf_model import load_cf_model
 
-    model, user_ids, item_ids = train_and_save_model()
+    model, user_ids, item_ids = load_cf_model(force_retrain=False)
 
 Behavior:
     - If cf_als_model.pkl and cf_als_index.pkl already exist AND
@@ -26,7 +28,7 @@ Author: Ludex Project
 
 from pathlib import Path
 import pickle
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -195,11 +197,11 @@ def train_als(user_items: coo_matrix) -> implicit.als.AlternatingLeastSquares:
 
 
 # ======================================================
-# PUBLIC API: TRAIN + SAVE OR LOAD
+# PUBLIC API: LOAD / TRAIN + SAVE
 
-def train_and_save_model(force_retrain: bool = False):
+def load_cf_model(force_retrain: bool = False):
     """
-    Public helper for CF module users (e.g., recommend_for_user.py).
+    High-level helper for CF consumers (e.g., recommend_for_user.py).
 
     Behavior:
         - If force_retrain is False AND cf_als_model.pkl AND cf_als_index.pkl
@@ -228,8 +230,8 @@ def train_and_save_model(force_retrain: bool = False):
         with open(INDEX_PATH, "rb") as f:
             idx = pickle.load(f)
 
-        user_ids = list(idx["user_ids"])
-        item_ids = list(idx["item_ids"])
+        user_ids: List[str] = list(idx["user_ids"])
+        item_ids: List[int] = list(idx["item_ids"])
         return model, user_ids, item_ids
 
     print(

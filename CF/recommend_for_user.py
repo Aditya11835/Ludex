@@ -4,12 +4,18 @@ import sys
 import json
 import time
 import random
-import pickle
 from typing import Dict, List, Set, Tuple
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+
+# CF modules (mirror CBF structure)
+from cf_model import load_cf_model, INTERACTIONS_CSV  # model + index loader
+from interactions_update import (                  # interactions grow + retrain
+    load_interactions,
+    ensure_users_in_data_and_retrain,
+)
 
 # ---------------- PATHS / CONSTANTS ----------------
 
@@ -20,20 +26,12 @@ BASE = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE / ".env"
 load_dotenv(ENV_PATH)
 
-# processed data (Ludex/data/processed) – for model + index only
-PROC = BASE / "data" / "processed"
-PROC.mkdir(parents=True, exist_ok=True)
-
 # raw cache (Ludex/data/raw/players)
 RAW_PLAYERS = BASE / "data" / "raw" / "players"
 RAW_PLAYERS.mkdir(parents=True, exist_ok=True)
 
-MODEL_PATH = PROC / "cf_als_model.pkl"
-INDEX_PATH = PROC / "cf_als_index.pkl"
-
-INTERACTIONS_CSV = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
-GAMES_CSV        = BASE / "data" / "raw" / "game_details.csv"
-NAMES_CSV        = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
+GAMES_CSV = BASE / "data" / "raw" / "game_details.csv"
+NAMES_CSV = BASE / "data" / "raw" / "user_game_playtime_top20.csv"
 
 # Steam API Key loaded from .env
 STEAM_API_KEY = os.getenv("STEAM_API_KEY")
@@ -234,17 +232,6 @@ def build_appid_to_name(appids: List[int]) -> Dict[int, str]:
     return appid_to_name
 
 
-def load_interactions() -> pd.DataFrame:
-    if not INTERACTIONS_CSV.exists():
-        raise SystemExit(f"Missing interactions CSV: {INTERACTIONS_CSV}")
-    df = pd.read_csv(INTERACTIONS_CSV)
-    if df.empty:
-        raise SystemExit("ERROR: interactions CSV is empty.")
-    df["steamid"] = df["steamid"].astype(str)
-    df["appid"] = df["appid"].astype(int)
-    return df
-
-
 def load_user_owned_and_popularity(df: pd.DataFrame) -> Tuple[Dict[str, Set[int]], Dict[int, float]]:
     """From df, build owned_map + popularity scores."""
     owned_map: Dict[str, Set[int]] = {}
@@ -260,50 +247,6 @@ def load_user_owned_and_popularity(df: pd.DataFrame) -> Tuple[Dict[str, Set[int]
     else:
         pop_norm = pop
     return owned_map, pop_norm.to_dict()
-
-
-def ensure_users_in_data_and_retrain(steamids: List[str]) -> None:
-    """
-    For each steamid not present in INTERACTIONS_CSV:
-      - fetch owned games (top 20, public only)
-      - append to CSV
-    If any rows were added, retrain ALS once.
-
-    This function assumes the base CF model/index already exist.
-    """
-    if not STEAM_API_KEY:
-        print("STEAM_API_KEY not set; cannot auto-add new users.")
-        return
-
-    steamids = [str(s) for s in steamids]
-    df = load_interactions()
-    existing_users = set(df["steamid"].unique())
-
-    new_rows = []
-    for sid in steamids:
-        if sid in existing_users:
-            continue
-        print(f"Adding new user {sid} to interactions via API...")
-        owned_json = fetch_owned_games(sid)
-        rows = select_top_games_from_json(owned_json, top_n=20)
-        for r in rows:
-            r["steamid"] = sid
-        new_rows.extend(rows)
-
-    if not new_rows:
-        print("No new playable games found for missing users; no retrain needed.")
-        return
-
-    df_new = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-    df_new.drop_duplicates(subset=["steamid", "appid"], inplace=True)
-    # writes back to data/raw/user_game_playtime_top20.csv
-    df_new.to_csv(INTERACTIONS_CSV, index=False)
-    print(f"Appended {len(new_rows)} new interaction rows. Retraining model...")
-
-    # use modular trainer: force_retrain=True to overwrite old .pkl files
-    from train_cf_als import train_and_save_model
-    train_and_save_model(force_retrain=True)
-    print("Retrain complete.")
 
 
 # ---------------- CORE RECOMMENDATION LOGIC ----------------
@@ -414,14 +357,6 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
             f"Run the crawler first to create it."
         )
 
-    # --- Initial training if model/index missing ---
-    if (not MODEL_PATH.exists()) or (not INDEX_PATH.exists()):
-        print("CF model/index not found. Training ALS from scratch via train_cf_als.train_and_save_model() ...")
-        from train_cf_als import train_and_save_model
-        # force_retrain=False is enough here; files don't exist anyway
-        train_and_save_model(force_retrain=False)
-        print("Initial CF model trained.\n")
-
     # Enrich interactions with this user + friends and retrain only if needed
     ensure_users_in_data_and_retrain([steamid_str] + friends)
 
@@ -429,20 +364,11 @@ def main(steamid_str: str, num_recs: int = 10) -> None:
     df = load_interactions()
     owned_map, pop_norm = load_user_owned_and_popularity(df)
 
-    # Safety: model/index MUST exist now
-    if not MODEL_PATH.exists() or not INDEX_PATH.exists():
-        raise SystemExit(
-            "Model or index file not found even after training.\n"
-            "Check train_cf_als.py and your data setup."
-        )
+    # Load CF model + index (trains if missing, otherwise loads)
+    model, user_ids, item_ids = load_cf_model(force_retrain=False)
 
-    with open(MODEL_PATH, "rb") as f:
-        model = pickle.load(f)
-    with open(INDEX_PATH, "rb") as f:
-        idx = pickle.load(f)
-
-    user_ids = [str(sid) for sid in idx["user_ids"]]
-    item_ids = list(idx["item_ids"])
+    user_ids = [str(sid) for sid in user_ids]
+    item_ids = list(item_ids)
 
     steamid_to_idx = {sid: i for i, sid in enumerate(user_ids)}
     in_model = steamid_str in steamid_to_idx

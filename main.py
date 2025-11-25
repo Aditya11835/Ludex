@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 import numpy as np
 
-from CBF.model import load_catalogue_and_features
+from CBF.cbf_model import load_catalogue_and_features
 from CBF.user import (
     fetch_owned_games,
     map_owned_to_indices,
