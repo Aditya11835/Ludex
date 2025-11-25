@@ -1,10 +1,9 @@
 # 🚀 Ludex: A Hybrid Content + Collaborative Game Recommendation System for Steam
 
 Ludex is a machine learning based game recommendation engine built for the Steam store as part of a 5th-semester B.Tech project at IIIT Pune.  
-It replaces the “discoverability lottery” with **deeply personalized**, **content-aware**, **CF-enhanced**, and **diversity-rich** recommendations.
+It aims to replace the “discoverability lottery” with **deeply personalized**, **content-aware**, **CF-enhanced**, and **diversity-rich** recommendations.
 
 Ludex learns from:
-
 - What you **play**
 - How long you **play it**
 - What the **games actually are** (tags, genres, mechanics, writing style)
@@ -21,20 +20,7 @@ Ludex learns from:
 > ❗ In Progress  
 > - Final Hybrid Blending (CBF + CF unified score)  
 > - Evaluation Suite (Recall@K, MAP, NDCG)  
-> - Simple Web UI  
-
----
-
-# 🎯 Why Ludex?
-
-Steam has 100k+ games, but most users explore less than 15% of what they *could* enjoy.
-
-Ludex solves this by:
-
-- Understanding your **holistic taste**, not simply popular games  
-- Balancing **main-genre comfort picks** with **exploration**  
-- Ensuring **fairness** so minority genres (VN, tactics, roguelite, metroidvania) don’t disappear  
-- Automatically extending its catalogue whenever it encounters a missing owned game  
+> - Simple Web UI   
 
 ---
 
