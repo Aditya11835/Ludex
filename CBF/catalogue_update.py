@@ -1,5 +1,3 @@
-# recommender/catalogue_update.py
-
 import time
 import random
 import re
@@ -22,7 +20,6 @@ from .cbf_model import (
 
 # ======================================================
 # CONFIG (mirrors crawler)
-# ======================================================
 
 DATA_DIR = INPUT_CSV.parent  # data/raw
 
@@ -35,7 +32,6 @@ USER_AGENT = (
 
 # ======================================================
 # COOKIE + SESSION HELPERS (adapted from crawler)
-# ======================================================
 
 def ensure_directories():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -122,7 +118,6 @@ def fetch_with_retry(session, url, retries: int = 3) -> str:
 
 # ======================================================
 # PARSING (copied from crawler)
-# ======================================================
 
 def parse_detail_html(appid: int, title: str, html: str) -> dict:
     """
@@ -185,7 +180,6 @@ def parse_detail_html(appid: int, title: str, html: str) -> dict:
 
 # ======================================================
 # CATALOGUE EXTENSION LOGIC
-# ======================================================
 
 def extend_catalogue_with_missing_games(
     owned_df: pd.DataFrame,

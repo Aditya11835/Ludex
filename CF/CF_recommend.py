@@ -10,7 +10,7 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-# CF modules (mirror CBF structure)
+# CF modules
 from cf_model import load_cf_model, INTERACTIONS_CSV  # model + index loader
 from interactions_update import (                  # interactions grow + retrain
     load_interactions,

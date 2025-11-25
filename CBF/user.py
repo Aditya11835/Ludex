@@ -9,7 +9,6 @@ from sklearn.preprocessing import normalize
 
 # ======================================================
 # STEAM FETCH + MAPPING
-# ======================================================
 
 def fetch_owned_games(steamid64: str, api_key: str) -> pd.DataFrame:
     """
@@ -65,7 +64,6 @@ def map_owned_to_indices(owned_df: pd.DataFrame, catalogue_df: pd.DataFrame) -> 
 
 # ======================================================
 # INTERNAL: ANCHOR SELECTION
-# ======================================================
 
 def _select_anchors(
     owned_mapped: pd.DataFrame,
@@ -118,7 +116,6 @@ def _select_anchors(
 
 # ======================================================
 # USER CONTENT PROFILE (SINGLE VECTOR, WITH COLD-START HANDLING)
-# ======================================================
 
 def build_user_content_profile(
     owned_mapped: pd.DataFrame,
@@ -182,7 +179,6 @@ def build_user_content_profile(
 
 # ======================================================
 # GLOBAL CBF SCORING
-# ======================================================
 
 def score_games_cbf(
     user_vec: np.ndarray,
@@ -210,7 +206,6 @@ def score_games_cbf(
 
 # ======================================================
 # ANCHOR-BASED SCORES (SOFT, WEIGHTED BY PLAYTIME)
-# ======================================================
 
 def compute_anchor_soft_scores(
     owned_mapped: pd.DataFrame,
@@ -261,7 +256,6 @@ def compute_anchor_soft_scores(
 
 # ======================================================
 # DIVERSITY-AWARE RE-RANKING (MMR)
-# ======================================================
 
 def mmr_rerank(
     candidate_indices: np.ndarray,
@@ -330,7 +324,6 @@ def mmr_rerank(
 
 # ======================================================
 # HIGH-LEVEL RECOMMENDER: USER VECTOR + ANCHORS + MMR
-# ======================================================
 
 def recommend_cbf_user_plus_anchors_mmr(
     catalogue_df: pd.DataFrame,

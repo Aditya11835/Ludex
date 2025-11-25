@@ -12,7 +12,6 @@ from scipy.sparse import save_npz, load_npz
 
 # ======================================================
 # CONFIG
-# ======================================================
 
 DATA_DIR = Path("data")
 INPUT_CSV = DATA_DIR / "raw" / "game_details.csv"
@@ -35,7 +34,6 @@ PUB_SCALE = 0.1       # publishers
 
 # ======================================================
 # TEXT HELPERS
-# ======================================================
 
 def split_and_normalize_tags(text: str):
     """
@@ -125,7 +123,6 @@ def desc_tokenizer(text: str):
 
 # ======================================================
 # FEATURE BUILDING
-# ======================================================
 
 def build_feature_matrix(df: pd.DataFrame) -> sp.csr_matrix:
     """
@@ -229,7 +226,6 @@ def build_feature_matrix(df: pd.DataFrame) -> sp.csr_matrix:
 
 # ======================================================
 # LOAD + CACHE
-# ======================================================
 
 def load_catalogue_and_features(
     csv_path: Optional[Path] = None,

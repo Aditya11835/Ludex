@@ -18,7 +18,7 @@ DATA_DIR = Path("data/raw")
 INPUT_CSV = DATA_DIR / "search_basic_clean.csv"
 OUTPUT_CSV = DATA_DIR / "game_details.csv"
 
-NUM_WORKERS = 6          # safe range 4–8
+NUM_WORKERS = 6          
 REQUEST_DELAY = 0.8      # per-thread polite delay
 
 USER_AGENT = (

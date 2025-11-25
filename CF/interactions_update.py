@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 from cf_model import (
     BASE,
     INTERACTIONS_CSV,
-    load_cf_model,     # used to retrain when interactions grow
+    load_cf_model,     
 )
 
 
@@ -60,7 +60,6 @@ REQUEST_DELAY = 0.5  # seconds between live API calls (polite)
 
 # ======================================================
 # SMALL UTILITIES (HTTP + OWNED GAMES)
-# ======================================================
 
 def safe_get(url: str, params: dict, max_retries: int = 3):
     """GET with simple retries + polite backoff."""
@@ -160,7 +159,6 @@ def select_top_games_from_json(owned_json, top_n: int = 20):
 
 # ======================================================
 # INTERACTIONS HELPERS
-# ======================================================
 
 def load_interactions() -> pd.DataFrame:
     """

@@ -8,7 +8,7 @@ from CBF.CBF_recommend import generate_cbf_recommendations
 
 
 # ======================================================
-# CONFIG (kept in main because they may affect hybrid)
+# CONFIG
 
 TOP_N = 20
 MIN_PLAYTIME = 60          # Minimum minutes for an owned game to count strongly
@@ -107,10 +107,10 @@ def main(steamid64: str):
         return
 
     # --------------------------------------------------
-    # 2) (Optional, future) integrate CF here.
+    # 2) Integrate CF here.
     #
     # For now, treat `cbf_anchor_combined` as the CBF signal.
-    # Once CF is available, you can do something like:
+    # Once CF is available, do something like:
     #
     #   cf_scores_for_recs = ...
     #   recs['hybrid_score'] = combine_cbf_cf(
