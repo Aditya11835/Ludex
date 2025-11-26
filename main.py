@@ -19,15 +19,15 @@ MIN_PLAYTIME = 60              # Minimum minutes for an owned game to count stro
 # How many candidates each side (CBF / CF) contributes
 CANDIDATE_POOL_SIZE = 500
 
-# CBF internal MMR: set to 0.0 so CBF gives a pure relevance ranking
+# CBF internal MMR: set to 0.0 as a Disable Flag
 LAMBDA_MMR_CBF = 0.0
 
 # Final MMR on HYBRID scores
-LAMBDA_MMR_HYBRID = 0.7        # relevance vs diversity
+LAMBDA_MMR_HYBRID = 0.6        # relevance vs diversity
 
 BETA_ANCHOR_BLEND = 0.3        # anchor vs global CBF in user scoring
 
-ALPHA_HYBRID = 0.35             # CF vs CBF weight in final hybrid score
+ALPHA_HYBRID = 0.35            # CF vs CBF weight in final hybrid score
 
 
 # ======================================================
@@ -96,7 +96,7 @@ def mmr_rerank(
     top_k: int,
 ) -> np.ndarray:
     """
-    Apply MMR on the *hybrid* scores, using TF–IDF content similarity
+    Apply MMR on the hybrid scores, using TF–IDF content similarity
     from the CBF feature matrix.
 
     Parameters
@@ -113,7 +113,7 @@ def mmr_rerank(
     Returns
     -------
     selected_indices : np.ndarray[int]
-        Indices into the original `appids` array in the MMR order.
+        Indices into the original appids array in the MMR order.
     """
     appids = np.asarray(appids, dtype=int)
     hybrid_scores = np.asarray(hybrid_scores, dtype=float)
@@ -183,7 +183,7 @@ def mmr_rerank(
 
         selected_valid.append(best_local)
 
-    # Map back to global positions in `appids`
+    # Map back to global positions in appids
     selected_global = [valid_positions[i] for i in selected_valid]
 
     # If fewer than top_k, fill with remaining by pure relevance
@@ -225,10 +225,55 @@ def main(steamid64: str):
         lambda_mmr=LAMBDA_MMR_CBF,  # 0.0 → pure relevance list (internal MMR off)
     )
 
+    # ---------- NEW: pure CF fallback if CBF fails ----------
     if cbf_recs.empty:
-        print("\nNo content-based recommendations generated for this user.")
-        # Future: fall back directly to pure CF or popularity here.
+        print("\n[HYBRID] No content-based recommendations generated; falling back to pure CF.")
+        cf_recs = generate_cf_recommendations(
+            steamid64=steamid64,
+            top_k=TOP_N,
+        )
+
+        if cf_recs is None or cf_recs.empty:
+            print("\n[CF] No CF recommendations available for this user either.")
+            return
+
+        # Normalise CF scores for readability
+        cf_recs = cf_recs.copy()
+        cf_recs["cf_score_norm"] = normalise_scores(
+            cf_recs["cf_score_raw"].to_numpy(dtype=float)
+        )
+
+        # Try to attach titles from the CBF catalogue
+        try:
+            catalogue_df, _ = load_catalogue_and_features()
+            appid_to_title = {
+                int(a): t
+                for a, t in zip(
+                    catalogue_df["appid"].astype(int).to_numpy(),
+                    catalogue_df["title"].astype(str).to_numpy(),
+                )
+            }
+        except Exception:
+            appid_to_title = {}
+
+        print("\nTop Recommendations (Pure CF fallback):")
+        # Use raw CF ranking but only show TOP_N
+        cf_recs_sorted = cf_recs.sort_values("cf_score_raw", ascending=False).head(TOP_N)
+        for _, row in cf_recs_sorted.iterrows():
+            appid = int(row["appid"])
+            title = appid_to_title.get(appid, f"appid {appid}")
+            cf_val = row.get("cf_score_norm", np.nan)
+            try:
+                cf_str = f"{float(cf_val):.4f}" if np.isfinite(cf_val) else "nan"
+            except Exception:
+                cf_str = "nan"
+
+            print(
+                f"- {title} "
+                f"(appid={appid}, cf_norm={cf_str})"
+            )
         return
+    # ---------- END pure CF fallback branch ----------
 
     cbf_recs = cbf_recs.copy()
 
@@ -339,7 +384,7 @@ def main(steamid64: str):
         )
 
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     parser = argparse.ArgumentParser(
         description="Ludex hybrid recommender (CBF + CF + single MMR on hybrid)."
     )
