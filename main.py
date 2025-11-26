@@ -2,20 +2,32 @@ import os
 import argparse
 from dotenv import load_dotenv
 import numpy as np
+import pandas as pd
 
 from CBF.CBF_recommend import generate_cbf_recommendations
-from CF.CF_recommend import get_cf_scores_for_appids
+from CBF.cbf_model import load_catalogue_and_features
+from CF.CF_recommend import generate_cf_recommendations
 
 
 # ======================================================
 # CONFIG
 
-TOP_N = 20
-MIN_PLAYTIME = 60            # Minimum minutes for an owned game to count strongly
-CANDIDATE_POOL_SIZE = 1000   # How many top-CBF games to consider before MMR
-BETA_ANCHOR_BLEND = 0.3      # Weight for anchor_soft vs global CBF
-LAMBDA_MMR = 0.7             # Relevance vs diversity in MMR
-ALPHA_HYBRID = 0.5           # CF vs CBF weight in final hybrid score
+TOP_N = 20                     # Final recommendations to show
+
+MIN_PLAYTIME = 60              # Minimum minutes for an owned game to count strongly
+
+# How many candidates each side (CBF / CF) contributes
+CANDIDATE_POOL_SIZE = 500
+
+# CBF internal MMR: set to 0.0 so CBF gives a pure relevance ranking
+LAMBDA_MMR_CBF = 0.0
+
+# Final MMR on HYBRID scores
+LAMBDA_MMR_HYBRID = 0.7        # relevance vs diversity
+
+BETA_ANCHOR_BLEND = 0.3        # anchor vs global CBF in user scoring
+
+ALPHA_HYBRID = 0.35             # CF vs CBF weight in final hybrid score
 
 
 # ======================================================
@@ -49,6 +61,10 @@ def combine_cbf_cf(
     """
     Combine CBF and CF scores into a single hybrid score vector.
 
+    IMPORTANT:
+        Inputs are assumed to ALREADY be in a comparable scale,
+        typically [0, 1]. No normalisation is done here.
+
     Hybrid(u, i) = alpha * CF(u, i) + (1 - alpha) * CBF(u, i)
 
     If cf_scores is None, this function just returns cbf_scores.
@@ -56,7 +72,6 @@ def combine_cbf_cf(
     cbf_scores = np.asarray(cbf_scores, dtype=float)
 
     if cf_scores is None:
-        # CF not available → pure CBF
         return cbf_scores
 
     cf_scores = np.asarray(cf_scores, dtype=float)
@@ -65,14 +80,124 @@ def combine_cbf_cf(
             f"Shape mismatch: cbf_scores {cbf_scores.shape}, cf_scores {cf_scores.shape}"
         )
 
-    cbf_norm = normalise_scores(cbf_scores)
-    cf_norm = normalise_scores(cf_scores)
-
     alpha = float(alpha)
     alpha = max(0.0, min(1.0, alpha))  # clamp to [0, 1]
 
-    hybrid = alpha * cf_norm + (1.0 - alpha) * cbf_norm
-    return hybrid
+    return alpha * cf_scores + (1.0 - alpha) * cbf_scores
+
+
+# ======================================================
+# MMR ON HYBRID
+
+def mmr_rerank(
+    appids: np.ndarray,
+    hybrid_scores: np.ndarray,
+    lambda_mmr: float,
+    top_k: int,
+) -> np.ndarray:
+    """
+    Apply MMR on the *hybrid* scores, using TF–IDF content similarity
+    from the CBF feature matrix.
+
+    Parameters
+    ----------
+    appids : np.ndarray[int]
+        Candidate appids.
+    hybrid_scores : np.ndarray[float]
+        Relevance scores to use in MMR.
+    lambda_mmr : float
+        Relevance vs diversity trade-off.
+    top_k : int
+        Number of items to select.
+
+    Returns
+    -------
+    selected_indices : np.ndarray[int]
+        Indices into the original `appids` array in the MMR order.
+    """
+    appids = np.asarray(appids, dtype=int)
+    hybrid_scores = np.asarray(hybrid_scores, dtype=float)
+
+    if appids.size == 0:
+        return np.array([], dtype=int)
+
+    # Load catalogue + feature matrix (L2-normalised)
+    catalogue_df, full_matrix_norm = load_catalogue_and_features()
+    appid_to_idx = {
+        int(a): i
+        for i, a in enumerate(catalogue_df["appid"].astype(int).to_numpy())
+    }
+
+    # Map candidate appids to rows in the feature matrix
+    row_indices = []
+    for appid in appids:
+        idx = appid_to_idx.get(int(appid), None)
+        row_indices.append(-1 if idx is None else idx)
+
+    row_indices = np.asarray(row_indices, dtype=int)
+    valid_mask = row_indices >= 0
+
+    if not np.any(valid_mask):
+        # No content vectors → fallback to pure relevance ranking
+        order = np.argsort(-hybrid_scores)
+        return order[:top_k]
+
+    valid_positions = np.where(valid_mask)[0]
+    mat_rows = row_indices[valid_positions]
+
+    # Candidate vectors (assumed L2-normalised)
+    cand_vecs = full_matrix_norm[mat_rows]  # shape (M, D)
+
+    # Precompute similarity matrix in the valid subspace
+    # cand_vecs is sparse CSR; convert the result to a dense array
+    sim_matrix_sparse = cand_vecs @ cand_vecs.T
+    sim_matrix = sim_matrix_sparse.toarray()  # shape (M, M) dense ndarray
+
+    r_valid = hybrid_scores[valid_positions]
+    selected_valid: list[int] = []
+
+    max_items = min(top_k, len(valid_positions))
+
+    while len(selected_valid) < max_items:
+        if not selected_valid:
+            # First item: highest relevance
+            best_local = int(np.argmax(r_valid))
+        else:
+            selected_arr = np.array(selected_valid, dtype=int)
+
+            # max similarity to any already selected item
+            # sim_matrix[:, selected_arr] -> (M, len(selected))
+            # max(..., axis=1) -> (M, 1) so we flatten it
+            max_sims = sim_matrix[:, selected_arr].max(axis=1)
+            max_sims = np.asarray(max_sims).ravel()  # (M,)
+
+            mmr_scores = (
+                lambda_mmr * r_valid
+                - (1.0 - lambda_mmr) * max_sims
+            )
+            # mask already selected
+            mmr_scores[selected_arr] = -np.inf
+            best_local = int(np.argmax(mmr_scores))
+            if np.isneginf(mmr_scores[best_local]):
+                break
+
+        selected_valid.append(best_local)
+
+    # Map back to global positions in `appids`
+    selected_global = [valid_positions[i] for i in selected_valid]
+
+    # If fewer than top_k, fill with remaining by pure relevance
+    if len(selected_global) < min(top_k, len(appids)):
+        remaining = [i for i in range(len(appids)) if i not in selected_global]
+        remaining_sorted = sorted(
+            remaining,
+            key=lambda idx: hybrid_scores[idx],
+            reverse=True,
+        )
+        need = min(top_k, len(appids)) - len(selected_global)
+        selected_global.extend(remaining_sorted[:need])
+
+    return np.array(selected_global, dtype=int)
 
 
 # ======================================================
@@ -89,70 +214,106 @@ def main(steamid64: str):
         raise RuntimeError("SteamID64 is required")
 
     # --------------------------------------------------
-    # 1) Run the CBF-only pipeline to get recommendations
-    recs = generate_cbf_recommendations(
+    # 1) CBF: get its own top-K candidates (no diversity here)
+    cbf_recs = generate_cbf_recommendations(
         steamid64=steamid64,
         api_key=api_key,
-        top_n=TOP_N,
+        top_n=CANDIDATE_POOL_SIZE,
         min_playtime=MIN_PLAYTIME,
         candidate_pool_size=CANDIDATE_POOL_SIZE,
         beta_anchor_blend=BETA_ANCHOR_BLEND,
-        lambda_mmr=LAMBDA_MMR,
+        lambda_mmr=LAMBDA_MMR_CBF,  # 0.0 → pure relevance list (internal MMR off)
     )
 
-    if recs.empty:
+    if cbf_recs.empty:
         print("\nNo content-based recommendations generated for this user.")
         # Future: fall back directly to pure CF or popularity here.
         return
 
-    recs = recs.copy()
+    cbf_recs = cbf_recs.copy()
 
     # Base CBF signal
-    if "cbf_anchor_combined" in recs.columns:
-        cbf_base = recs["cbf_anchor_combined"].to_numpy(dtype=float)
+    if "cbf_anchor_combined" in cbf_recs.columns:
+        cbf_recs["cbf_score_raw"] = cbf_recs["cbf_anchor_combined"].astype(float)
+    elif "cbf" in cbf_recs.columns:
+        cbf_recs["cbf_score_raw"] = cbf_recs["cbf"].astype(float)
     else:
-        cbf_base = recs.get("cbf", 0.0).to_numpy(dtype=float)
+        # fallback: use a neutral constant (should not really happen)
+        cbf_recs["cbf_score_raw"] = 0.0
 
-    cf_scores = None  # default → pure CBF if anything fails
-
-    # --------------------------------------------------
-    # 2) CF Integration (modular)
-    #    Compute CF scores for the same appids present in `recs`
-    appids = recs["appid"].astype(int).to_numpy()
-
-    try:
-        cf_scores = get_cf_scores_for_appids(
-            steamid64=steamid64,
-            appids=appids,
-            enrich_interactions=True,
-            force_retrain=False,
-        )
-        if cf_scores is None:
-            print("\n[HYBRID] CF unavailable for this user/candidate set; using pure CBF.")
-    except Exception as e:
-        print(f"\n[HYBRID] Warning: CF integration failed ({e!r}); falling back to CBF-only.")
-        cf_scores = None
+    cbf_candidates = cbf_recs[["appid", "title", "cbf_score_raw"]].copy()
 
     # --------------------------------------------------
-    # 3) Final hybrid score
-
-    hybrid_scores = combine_cbf_cf(
-        cbf_scores=cbf_base,
-        cf_scores=cf_scores,
-        alpha=ALPHA_HYBRID,
+    # 2) CF: get its own top-K candidates
+    cf_recs = generate_cf_recommendations(
+        steamid64=steamid64,
+        top_k=CANDIDATE_POOL_SIZE,
     )
 
-    recs["cf_score"] = cf_scores if cf_scores is not None else np.zeros_like(cbf_base)
-    recs["hybrid_score"] = hybrid_scores
+    # --------------------------------------------------
+    # 3) Union of CBF + CF candidates
+    if cf_recs is not None and not cf_recs.empty:
+        union = pd.merge(
+            cbf_candidates,
+            cf_recs[["appid", "cf_score_raw"]],
+            on="appid",
+            how="outer",
+        )
+    else:
+        # CF unavailable → union is just CBF with cf_score_raw = 0
+        union = cbf_candidates.copy()
+        union["cf_score_raw"] = 0.0
+
+    union["cbf_score_raw"] = union["cbf_score_raw"].fillna(0.0)
+    union["cf_score_raw"] = union["cf_score_raw"].fillna(0.0)
 
     # --------------------------------------------------
-    # 4) Display results
+    # 4) Normalise CBF and CF scores separately, then hybrid
+    union["cbf_score_norm"] = normalise_scores(
+        union["cbf_score_raw"].to_numpy(dtype=float)
+    )
+    union["cf_score_norm"] = normalise_scores(
+        union["cf_score_raw"].to_numpy(dtype=float)
+    )
 
-    print("\nTop Recommendations (Hybrid CBF + CF when available):")
-    for _, row in recs.iterrows():
-        cbf_val = row.get("cbf", np.nan)
+    cbf_norm_arr = union["cbf_score_norm"].to_numpy(dtype=float)
+    cf_norm_arr = union["cf_score_norm"].to_numpy(dtype=float)
+
+    if np.all(cf_norm_arr == 0.0):
+        print("\n[HYBRID] CF unavailable or zero scores; using pure CBF for hybrid.")
+        hybrid_arr = cbf_norm_arr.copy()
+    else:
+        hybrid_arr = combine_cbf_cf(
+            cbf_scores=cbf_norm_arr,
+            cf_scores=cf_norm_arr,
+            alpha=ALPHA_HYBRID,
+        )
+
+    union["hybrid_score"] = hybrid_arr
+
+    # --------------------------------------------------
+    # 5) Single MMR pass on HYBRID scores
+    appids_union = union["appid"].astype(int).to_numpy()
+    selected_indices = mmr_rerank(
+        appids=appids_union,
+        hybrid_scores=hybrid_arr,
+        lambda_mmr=LAMBDA_MMR_HYBRID,
+        top_k=TOP_N,
+    )
+
+    final = union.iloc[selected_indices].reset_index(drop=True)
+
+    # --------------------------------------------------
+    # 6) Display results (showing normalised scores)
+    print("\nTop Recommendations (Hybrid CBF + CF with MMR on hybrid):")
+    for _, row in final.iterrows():
+        title = row.get("title")
+        if not isinstance(title, str) or not title.strip():
+            title = f"appid {row['appid']}"
+
+        cbf_val = row.get("cbf_score_norm", np.nan)
+        cf_val = row.get("cf_score_norm", np.nan)
         hybrid_val = row.get("hybrid_score", np.nan)
-        cf_val = row.get("cf_score", np.nan)
 
         try:
             cbf_str = f"{float(cbf_val):.4f}" if np.isfinite(cbf_val) else "nan"
@@ -170,17 +331,17 @@ def main(steamid64: str):
             hybrid_str = "nan"
 
         print(
-            f"- {row['title']} "
+            f"- {title} "
             f"(appid={row['appid']}, "
-            f"cbf={cbf_str}, "
-            f"cf={cf_str}, "
+            f"cbf_norm={cbf_str}, "
+            f"cf_norm={cf_str}, "
             f"hybrid={hybrid_str})"
         )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Ludex hybrid recommender (TF-IDF + anchors + MMR + CF ALS)."
+        description="Ludex hybrid recommender (CBF + CF + single MMR on hybrid)."
     )
     parser.add_argument(
         "steamid64",

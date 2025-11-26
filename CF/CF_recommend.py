@@ -2,170 +2,168 @@
 CF_recommend
 ------------
 
-Collaborative-filtering (ALS) utilities for a single Steam user.
+Collaborative-filtering (ALS) recommendation pipeline for a single Steam user.
 
-This module encapsulates the CF-only orchestration that used to live in
-the standalone `recommend_for_user.py`, mirroring how
-`CBF.CBF_recommend` encapsulates the CBF pipeline.
+This module encapsulates the CF-only orchestration (simplified from the old
+`recommend_for_user.py`) and exposes a DataFrame-based API:
 
-Public API
-----------
-    from CF.CF_recommend import get_cf_scores_for_appids
+    from CF.CF_recommend import generate_cf_recommendations
 
-    cf_scores = get_cf_scores_for_appids(
+    cf_recs = generate_cf_recommendations(
         steamid64=...,
-        appids=[570, 440, 730, ...],
+        top_k=1000,
     )
 
 Returns
 -------
-    cf_scores : numpy.ndarray | None
-        A 1D vector of CF scores aligned with the given `appids`.
-        If CF cannot be used (missing interactions/model/user/overlap),
-        returns None. When it returns an array, positions where CF has
-        no factor for a given appid are filled with 0.0.
+    cf_recs : pandas.DataFrame
+        Columns:
+            - appid    : int
+            - cf_score_raw : float (popularity-adjusted ALS score)
 """
 
 from __future__ import annotations
 
-from typing import Sequence, Optional
+from typing import List, Dict, Set
 
 import numpy as np
+import pandas as pd
 
-from CF.cf_model import load_cf_model, INTERACTIONS_CSV
-from CF.interactions_update import ensure_users_in_data_and_retrain
+from .cf_model import load_cf_model, INTERACTIONS_CSV
+from .interactions_update import (
+    load_interactions,
+    ensure_users_in_data_and_retrain,
+)
 
 
-def get_cf_scores_for_appids(
-    steamid64: str,
-    appids: Sequence[int],
-    *,
-    enrich_interactions: bool = True,
-    force_retrain: bool = False,
-) -> Optional[np.ndarray]:
+def _build_popularity(df: pd.DataFrame) -> Dict[int, float]:
     """
-    Compute CF scores for a given user and a list/array of candidate appids.
+    From interactions, build normalised popularity score per appid.
+    """
+    pop = df.groupby("appid")["steamid"].nunique().astype(float)
+    pop_min, pop_max = pop.min(), pop.max()
+    if pop_max > pop_min:
+        pop_norm = (pop - pop_min) / (pop_max - pop_min)
+    elif pop_max > 0:
+        pop_norm = pop / pop_max
+    else:
+        pop_norm = pop
+    return pop_norm.to_dict()
 
-    This is intentionally "low-level": it does NOT perform any ranking
-    or sampling; it just returns a score for each appid, suitable for
-    hybridisation with CBF scores.
 
-    Steps
-    -----
-      1) Check that the interactions CSV exists (otherwise CF is disabled).
-      2) Optionally ensure this user is present in the interactions data,
-         retraining the ALS model if needed.
-      3) Load the ALS model + user/item id mappings.
-      4) Map SteamID64 -> user index in the ALS model.
-      5) Map each candidate appid to an ALS item index (if present).
-      6) For all candidates present in the model, compute:
-
-            score(u, i) = <user_factors[u], item_factors[i]>
-
-         and return a dense score vector aligned with `appids`.
+def generate_cf_recommendations(
+    steamid64: str,
+    *,
+    top_k: int = 1000,
+) -> pd.DataFrame:
+    """
+    Run the CF (ALS) pipeline for a single user and return a CF-only
+    recommendation DataFrame.
 
     Parameters
     ----------
     steamid64 : str
         SteamID64 of the user.
-    appids : Sequence[int]
-        Candidate appids to score (e.g. from CBF pipeline).
-    enrich_interactions : bool, default True
-        If True, calls `ensure_users_in_data_and_retrain([steamid64])`
-        before loading the CF model, so new users can be added.
-    force_retrain : bool, default False
-        Passed through to `load_cf_model(force_retrain=...)`. Usually
-        False; set True only if you intentionally want to retrain ALS.
+    top_k : int, default 1000
+        Number of CF candidates to return.
 
     Returns
     -------
-    numpy.ndarray or None
-        1D float64 array of length len(appids), where each entry is the
-        raw CF score for that appid (0.0 if not present in the model).
-        Returns None if CF cannot be used at all (e.g. interactions CSV
-        missing, user not in model after enrichment, or no overlap).
+    pandas.DataFrame
+        Columns:
+            - appid    : int
+            - cf_score_raw : float (pop-adjusted ALS score)
+
+        May be empty if CF is unavailable or user cannot be scored.
     """
     steamid64 = str(steamid64).strip()
     if not steamid64:
         raise ValueError("steamid64 must be a non-empty string")
 
-    # Normalise appids input
-    appids_arr = np.asarray(list(appids), dtype=int)
-    if appids_arr.size == 0:
-        # Trivial case: nothing to score.
-        return np.zeros(0, dtype=float)
-
     # --------------------------------------------------
-    # 1) Interactions CSV presence
+    # 1) Ensure interactions CSV exists
     if not INTERACTIONS_CSV.exists():
-        # CF pipeline not ready yet → signal to caller to fall back.
-        return None
+        # CF pipeline not ready → no CF candidates
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
 
     # --------------------------------------------------
-    # 2) Ensure user exists in interactions (optional)
+    # 2) Enrich interactions with this user (auto retrain if needed)
     try:
-        if enrich_interactions:
-            ensure_users_in_data_and_retrain([steamid64])
+        ensure_users_in_data_and_retrain([steamid64])
     except Exception as e:
-        # Any issue in enrichment → treat CF as unavailable.
         print(f"[CF] Warning: ensure_users_in_data_and_retrain failed: {e!r}")
-        return None
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
 
     # --------------------------------------------------
-    # 3) Load CF model + ID mappings
+    # 3) Load interactions + popularity
+    df = load_interactions()
+    if df.empty:
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
+
+    pop_norm = _build_popularity(df)
+
+    # Owned games in training (to filter them out)
+    user_inter = df[df["steamid"].astype(str) == steamid64]
+    owned_appids_training: Set[int] = set(user_inter["appid"].astype(int).tolist())
+
+    # --------------------------------------------------
+    # 4) Load CF ALS model + IDs
     try:
-        model, user_ids, item_ids = load_cf_model(force_retrain=force_retrain)
+        model, user_ids, item_ids = load_cf_model(force_retrain=False)
     except Exception as e:
         print(f"[CF] Warning: load_cf_model failed: {e!r}")
-        return None
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
 
-    # Normalise IDs
     user_ids = [str(sid) for sid in user_ids]
     item_ids = list(item_ids)
 
-    # --------------------------------------------------
-    # 4) Map SteamID64 -> user_idx
     if steamid64 not in user_ids:
-        print(f"[CF] User {steamid64} is not in ALS model; CF disabled for this user.")
-        return None
+        print(f"[CF] User {steamid64} not in ALS model after enrichment; CF empty.")
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
 
     user_idx = user_ids.index(steamid64)
 
     # --------------------------------------------------
-    # 5) Build appid -> ALS item index lookup
-    appid_to_item_idx = {int(a): i for i, a in enumerate(item_ids)}
-
-    cf_scores = np.zeros(appids_arr.shape[0], dtype=float)
-
-    positions: list[int] = []
-    cf_item_indices: list[int] = []
-
-    for pos, appid in enumerate(appids_arr):
-        idx = appid_to_item_idx.get(int(appid))
-        if idx is not None:
-            positions.append(pos)
-            cf_item_indices.append(idx)
-
-    if not cf_item_indices:
-        # None of the candidates exist in CF catalogue
-        print("[CF] No overlap between candidates and CF item catalogue.")
-        return None
-
-    # --------------------------------------------------
-    # 6) Compute dot-product scores for overlapping items
-    cf_item_indices_arr = np.asarray(cf_item_indices, dtype=int)
+    # 5) Recommend via ALS
+    total_items = len(item_ids)
+    raw_N = min(top_k + len(owned_appids_training) + 200, total_items)
 
     try:
-        # user_factors: (n_users, k), item_factors: (n_items, k)
-        user_vec_cf = model.user_factors[user_idx]                # (k,)
-        item_factors_subset = model.item_factors[cf_item_indices_arr]  # (m, k)
-
-        scores_subset = item_factors_subset @ user_vec_cf         # (m,)
+        item_indices, scores = model.recommend(
+            userid=user_idx,
+            user_items=None,
+            N=raw_N,
+            filter_already_liked_items=False,
+        )
     except Exception as e:
-        print(f"[CF] Warning: failed to compute CF scores: {e!r}")
-        return None
+        print(f"[CF] Warning: ALS recommend failed: {e!r}")
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
 
-    for pos, s in zip(positions, scores_subset):
-        cf_scores[pos] = float(s)
+    # --------------------------------------------------
+    # 6) Popularity-adjusted CF score and filter owned
+    LAMBDA_POP = 0.5  # popularity penalty factor
 
-    return cf_scores
+    recs: List[tuple[int, float]] = []
+    for item_idx, s in zip(item_indices, scores):
+        if item_idx < 0 or item_idx >= len(item_ids):
+            continue
+        appid = int(item_ids[item_idx])
+
+        # Skip games already in training interactions for this user
+        if appid in owned_appids_training:
+            continue
+
+        base_score = float(s)
+        p = pop_norm.get(appid, 0.0)
+        adj_score = base_score * (1.0 - LAMBDA_POP * p)
+        recs.append((appid, adj_score))
+
+    if not recs:
+        return pd.DataFrame(columns=["appid", "cf_score_raw"])
+
+    # Sort and keep top_k
+    recs.sort(key=lambda x: x[1], reverse=True)
+    recs = recs[:top_k]
+
+    df_out = pd.DataFrame(recs, columns=["appid", "cf_score_raw"])
+    return df_out
