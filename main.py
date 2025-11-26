@@ -384,7 +384,7 @@ def main(steamid64: str):
         )
 
 
-if _name_ == "_main_":
+if __name__ == "_main_":
     parser = argparse.ArgumentParser(
         description="Ludex hybrid recommender (CBF + CF + single MMR on hybrid)."
     )
