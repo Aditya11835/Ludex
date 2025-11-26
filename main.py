@@ -1,24 +1,25 @@
 import os
 import argparse
 from dotenv import load_dotenv
-
 import numpy as np
 
 from CBF.CBF_recommend import generate_cbf_recommendations
+from CF.CF_recommend import get_cf_scores_for_appids
 
 
 # ======================================================
 # CONFIG
 
 TOP_N = 20
-MIN_PLAYTIME = 60          # Minimum minutes for an owned game to count strongly
-CANDIDATE_POOL_SIZE = 1000  # How many top-CBF games to consider before MMR
-BETA_ANCHOR_BLEND = 0.3    # Weight for anchor_soft vs global CBF
-LAMBDA_MMR = 0.7           # Relevance vs diversity in MMR
+MIN_PLAYTIME = 60            # Minimum minutes for an owned game to count strongly
+CANDIDATE_POOL_SIZE = 1000   # How many top-CBF games to consider before MMR
+BETA_ANCHOR_BLEND = 0.3      # Weight for anchor_soft vs global CBF
+LAMBDA_MMR = 0.7             # Relevance vs diversity in MMR
+ALPHA_HYBRID = 0.5           # CF vs CBF weight in final hybrid score
 
 
 # ======================================================
-# HYBRID HOOKS (CBF + CF) – CF not plugged in yet
+# HYBRID HOOKS (CBF + CF)
 
 def normalise_scores(scores: np.ndarray) -> np.ndarray:
     """
@@ -50,14 +51,12 @@ def combine_cbf_cf(
 
     Hybrid(u, i) = alpha * CF(u, i) + (1 - alpha) * CBF(u, i)
 
-    For now:
-        - If cf_scores is None, this function just returns cbf_scores.
-        - When CF is implemented, pass a same-length cf_scores array.
+    If cf_scores is None, this function just returns cbf_scores.
     """
     cbf_scores = np.asarray(cbf_scores, dtype=float)
 
     if cf_scores is None:
-        # CF not available yet → pure CBF
+        # CF not available → pure CBF
         return cbf_scores
 
     cf_scores = np.asarray(cf_scores, dtype=float)
@@ -103,41 +102,70 @@ def main(steamid64: str):
 
     if recs.empty:
         print("\nNo content-based recommendations generated for this user.")
-        # In a future hybrid system, you can fall back to CF/popularity here.
+        # Future: fall back directly to pure CF or popularity here.
         return
 
-    # --------------------------------------------------
-    # 2) Integrate CF here.
-    #
-    # For now, treat `cbf_anchor_combined` as the CBF signal.
-    # Once CF is available, do something like:
-    #
-    #   cf_scores_for_recs = ...
-    #   recs['hybrid_score'] = combine_cbf_cf(
-    #       cbf_scores=recs['cbf_anchor_combined'].to_numpy(),
-    #       cf_scores=cf_scores_for_recs,
-    #       alpha=0.5,
-    #   )
-    #
     recs = recs.copy()
+
+    # Base CBF signal
     if "cbf_anchor_combined" in recs.columns:
-        recs["hybrid_score"] = recs["cbf_anchor_combined"]
+        cbf_base = recs["cbf_anchor_combined"].to_numpy(dtype=float)
     else:
-        # Fallback: just use pure CBF if for some reason the column is missing
-        recs["hybrid_score"] = recs.get("cbf", 0.0)
+        cbf_base = recs.get("cbf", 0.0).to_numpy(dtype=float)
+
+    cf_scores = None  # default → pure CBF if anything fails
 
     # --------------------------------------------------
-    # 3) Display results
-    print("\nTop Recommendations (currently CBF-only; hybrid-ready):")
+    # 2) CF Integration (modular)
+    #    Compute CF scores for the same appids present in `recs`
+    appids = recs["appid"].astype(int).to_numpy()
+
+    try:
+        cf_scores = get_cf_scores_for_appids(
+            steamid64=steamid64,
+            appids=appids,
+            enrich_interactions=True,
+            force_retrain=False,
+        )
+        if cf_scores is None:
+            print("\n[HYBRID] CF unavailable for this user/candidate set; using pure CBF.")
+    except Exception as e:
+        print(f"\n[HYBRID] Warning: CF integration failed ({e!r}); falling back to CBF-only.")
+        cf_scores = None
+
+    # --------------------------------------------------
+    # 3) Final hybrid score
+
+    hybrid_scores = combine_cbf_cf(
+        cbf_scores=cbf_base,
+        cf_scores=cf_scores,
+        alpha=ALPHA_HYBRID,
+    )
+
+    recs["cf_score"] = cf_scores if cf_scores is not None else np.zeros_like(cbf_base)
+    recs["hybrid_score"] = hybrid_scores
+
+    # --------------------------------------------------
+    # 4) Display results
+
+    print("\nTop Recommendations (Hybrid CBF + CF when available):")
     for _, row in recs.iterrows():
         cbf_val = row.get("cbf", np.nan)
         hybrid_val = row.get("hybrid_score", np.nan)
+        cf_val = row.get("cf_score", np.nan)
+
         try:
-            cbf_str = f"{cbf_val:.4f}" if np.isfinite(cbf_val) else "nan"
+            cbf_str = f"{float(cbf_val):.4f}" if np.isfinite(cbf_val) else "nan"
         except Exception:
             cbf_str = "nan"
+
         try:
-            hybrid_str = f"{hybrid_val:.4f}" if np.isfinite(hybrid_val) else "nan"
+            cf_str = f"{float(cf_val):.4f}" if np.isfinite(cf_val) else "nan"
+        except Exception:
+            cf_str = "nan"
+
+        try:
+            hybrid_str = f"{float(hybrid_val):.4f}" if np.isfinite(hybrid_val) else "nan"
         except Exception:
             hybrid_str = "nan"
 
@@ -145,13 +173,14 @@ def main(steamid64: str):
             f"- {row['title']} "
             f"(appid={row['appid']}, "
             f"cbf={cbf_str}, "
+            f"cf={cf_str}, "
             f"hybrid={hybrid_str})"
         )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Ludex CBF recommender (TF-IDF + anchors + MMR, hybrid-ready)."
+        description="Ludex hybrid recommender (TF-IDF + anchors + MMR + CF ALS)."
     )
     parser.add_argument(
         "steamid64",

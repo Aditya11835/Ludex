@@ -31,7 +31,7 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 
-from cf_model import (
+from CF.cf_model import (
     BASE,
     INTERACTIONS_CSV,
     load_cf_model,     
