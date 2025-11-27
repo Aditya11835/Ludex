@@ -1,151 +1,146 @@
+from pathlib import Path
+from typing import Tuple, List, Dict
 import time
 import random
+import json
 import re
-from pathlib import Path
-from typing import Tuple
 
-import pandas as pd
 import requests
+import pandas as pd
 import scipy.sparse as sp
 from bs4 import BeautifulSoup
-import undetected_chromedriver as uc
-
-from scipy.sparse import save_npz, load_npz
+from requests.exceptions import RequestException
 
 from .cbf_model import (
-    INPUT_CSV,            # data/raw/game_details.csv
-    FEATURE_MATRIX_NPZ,   # data/processed/recommender_matrix.npz
+    INPUT_CSV,            # data/raw/game_details.csv (Path)
+    FEATURE_MATRIX_NPZ,   # data/processed/recommender_matrix.npz (Path)
     build_feature_matrix,
 )
 
-# ======================================================
-# CONFIG (mirrors crawler)
+# -------------------------------------------------------------------
+# Config
+# -------------------------------------------------------------------
+DATA_DIR = INPUT_CSV.parent  # typically data/raw
+FEATURE_CACHE = FEATURE_MATRIX_NPZ
 
-DATA_DIR = INPUT_CSV.parent  # data/raw
+REQUEST_DELAY = 0.6  # polite delay between requests
+MAX_RETRIES = 4
+STORE_API = "https://store.steampowered.com/api/appdetails"
+STORE_PAGE = "https://store.steampowered.com/app/{appid}"
+USER_AGENTS = [
+    # A short rotating list — expand if you like
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/16.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/116.0.0.0 Safari/537.36",
+]
 
-REQUEST_DELAY = 0.8  # polite delay per request
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-)
+COMMON_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://store.steampowered.com/",
+}
 
+# cookies to try to bypass simple age-checks (no browser required)
+AGE_COOKIES = {
+    "birthtime": "189345601",  # sufficiently old
+    "mature_content": "1",
+    "wants_mature_content": "1",
+    "lastagecheckage": "1-January-1980",
+}
 
-# ======================================================
-# COOKIE + SESSION HELPERS (adapted from crawler)
-
+# -------------------------------------------------------------------
+# Helpers: HTTP + retries
+# -------------------------------------------------------------------
 def ensure_directories():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"[catalogue_update] Ensured folder: {DATA_DIR}")
+    print(f"[catalogue_update] ensured folder: {DATA_DIR}")
 
 
-def get_steam_cookies():
+def random_headers() -> Dict[str, str]:
+    ua = random.choice(USER_AGENTS)
+    h = COMMON_HEADERS.copy()
+    h["User-Agent"] = ua
+    return h
+
+
+def fetch_json_appdetails(appid: int, timeout: int = 15) -> dict:
     """
-    Use undetected Chrome once to bypass Cloudflare & age checks.
-
-    This is the same trick used in the main crawler, but here we'll
-    typically fetch only a handful of missing games for a specific user.
+    Use the Steam Store `appdetails` API which returns JSON for many apps.
+    This is the preferred, fast, and stable source.
     """
-    print("[catalogue_update] Launching browser to bypass Cloudflare…")
-
-    options = uc.ChromeOptions()
-    options.add_argument("--disable-blink-features=AutomationControlled")
-
-    browser = uc.Chrome(options=options)
-    cookies = {}
-    try:
-        # Any popular app page works; 730 = CS:GO/CS2
-        browser.get("https://store.steampowered.com/app/730")
-        time.sleep(7)
-        cookies = {c["name"]: c["value"] for c in browser.get_cookies()}
-    finally:
-        browser.quit()
-
-    cookies.update({
-        "birthtime": "189345601",
-        "mature_content": "1",
-        "wants_mature_content": "1",
-        "lastagecheckage": "1-January-1980",
-    })
-
-    print(f"[catalogue_update] Cookies obtained: {len(cookies)} entries.")
-    return cookies
-
-
-def make_session(cookies_dict):
-    """Create a requests.Session with Steam cookies + headers."""
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": USER_AGENT,
-        "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-        "Referer": "https://store.steampowered.com/",
-    })
-    s.cookies.update(cookies_dict)
-    return s
-
-
-def clean_url(url: str) -> str:
-    """Strip query params and normalise app URL."""
-    m = re.match(r"(https://store\.steampowered\.com/app/\d+)", url)
-    if m:
-        return m.group(1)
-    return url.split("?")[0]
-
-
-def fetch_html(session: requests.Session, url: str) -> str:
-    """Fetch a game page in English with basic error hints."""
-    full = url + "?l=english&cc=US"
-    r = session.get(full, timeout=25, allow_redirects=True)
-
-    if "agecheck" in r.url:
-        print("  [warn] Agecheck redirect during catalogue update")
-
-    if "problem fulfilling your request" in r.text:
-        print("  [warn] Steam error page during catalogue update")
-
-    r.raise_for_status()
-    return r.text
-
-
-def fetch_with_retry(session, url, retries: int = 3) -> str:
-    for attempt in range(retries):
+    params = {"appids": appid, "cc": "us", "l": "english"}
+    headers = random_headers()
+    for attempt in range(1, MAX_RETRIES + 1):
         try:
-            return fetch_html(session, url)
-        except Exception as e:
-            print(f"   [retry {attempt+1}/{retries}] {url} — {e}")
-            time.sleep(1 + random.random() * 2)
-    raise RuntimeError(f"Failed to fetch {url} after {retries} retries.")
+            r = requests.get(STORE_API, params=params, headers=headers, timeout=timeout)
+            if r.status_code != 200:
+                # transient error, backoff and retry
+                time.sleep(REQUEST_DELAY * attempt)
+                continue
+            js = r.json()
+            # return the entry for the appid (may have 'success': False)
+            return js.get(str(appid), {})
+        except (RequestException, ValueError):
+            time.sleep(REQUEST_DELAY * attempt)
+            continue
+    return {}
 
 
-# ======================================================
-# PARSING (copied from crawler)
-
-def parse_detail_html(appid: int, title: str, html: str) -> dict:
+def fetch_html_page(appid: int, timeout: int = 20) -> str:
     """
-    Parse Steam game detail HTML into the same schema as game_details.csv.
-
-    Returns a dict with keys:
-        appid, title, developers, publishers, genres, tags, description
+    Fetch the Steam Store page HTML. Attempts to bypass age-checks
+    by sending standard cookies (no browser).
     """
-    soup = BeautifulSoup(html, "html.parser")
+    url = STORE_PAGE.format(appid=appid)
+    headers = random_headers()
+    session = requests.Session()
+    session.headers.update(headers)
+    session.cookies.update(AGE_COOKIES)
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            r = session.get(url + "?l=english&cc=us", timeout=timeout, allow_redirects=True)
+            text = r.text or ""
+            # if Cloudflare or other blocks are detected, try small backoff and retry
+            if r.status_code in (429, 503) or "problem fulfilling your request" in text.lower():
+                time.sleep(REQUEST_DELAY * attempt + random.random())
+                continue
+            return text
+        except RequestException as e:
+            time.sleep(REQUEST_DELAY * attempt)
+            continue
+    raise RuntimeError(f"Failed to fetch page for appid={appid}")
+
+
+# -------------------------------------------------------------------
+# Parsing helpers (BeautifulSoup)
+# -------------------------------------------------------------------
+def _clean_text(node):
+    if not node:
+        return ""
+    return node.get_text(separator=" ", strip=True)
+
+
+def parse_html_to_metadata(appid: int, title_hint: str, html: str) -> dict:
+    soup = BeautifulSoup(html, "lxml")
 
     # Developers
     developers = sorted(set(
-        a.get_text(strip=True)
-        for a in soup.select("div.dev_row a")
-        if a.get_text(strip=True)
+        a.get_text(strip=True) for a in soup.select("div.dev_row a") if a.get_text(strip=True)
     ))
 
+    # Publishers & Genres
     publishers = []
     genres = []
-
     for block in soup.select("div.details_block"):
         for b in block.find_all("b"):
             label = b.get_text(strip=True)
-
             if "Publisher" in label:
                 pubs = [a.get_text(strip=True) for a in b.parent.find_all("a")]
                 publishers.extend(pubs)
-
             if "Genre" in label:
                 gens = [a.get_text(strip=True) for a in b.parent.find_all("a")]
                 genres.extend(gens)
@@ -167,8 +162,16 @@ def parse_detail_html(appid: int, title: str, html: str) -> dict:
         snip = soup.select_one("div.game_description_snippet")
         description = snip.get_text(strip=True) if snip else ""
 
+    title = title_hint or ""
+    # attempt to extract a better title from the page
+    title_el = soup.select_one("div.apphub_AppName")
+    if title_el:
+        t = title_el.get_text(strip=True)
+        if t:
+            title = t
+
     return {
-        "appid": appid,
+        "appid": int(appid),
         "title": title,
         "developers": "; ".join(developers),
         "publishers": "; ".join(publishers),
@@ -178,119 +181,136 @@ def parse_detail_html(appid: int, title: str, html: str) -> dict:
     }
 
 
-# ======================================================
-# CATALOGUE EXTENSION LOGIC
+# -------------------------------------------------------------------
+# High-level: fetch metadata (API-first, HTML fallback)
+# -------------------------------------------------------------------
+def fetch_game_metadata(appid: int, title_hint: str = "") -> dict:
+    """
+    Attempt to fetch rich metadata for an appid:
+      1) Try Steam Store API `appdetails`
+      2) If API missing required fields, fallback to HTML fetch + parse
+    Returns a dict matching the CSV schema used by your CBF pipeline.
+    """
+    # 1) Try API
+    api_entry = fetch_json_appdetails(appid)
+    if api_entry and api_entry.get("success"):
+        data = api_entry.get("data", {})
+        # extract fields if present
+        title = data.get("name", title_hint or "")
+        developers = data.get("developers", []) or []
+        publishers = data.get("publishers", []) or []
+        genres_list = []
+        tags_list = []
 
+        # some API responses include categories/genres
+        if "genres" in data and isinstance(data["genres"], list):
+            genres_list = [g.get("description", "") for g in data["genres"] if g.get("description")]
+        # tags are often missing in API; we will fallback if tags are empty
+
+        description = ""
+        if isinstance(data.get("short_description", ""), str):
+            description = data.get("short_description", "")
+
+        # if we have enough metadata (tags or description or genres), accept it
+        if (description or genres_list or developers) and len(tags_list) >= 1:
+            return {
+                "appid": int(appid),
+                "title": title,
+                "developers": "; ".join(developers),
+                "publishers": "; ".join(publishers),
+                "genres": "; ".join(genres_list),
+                "tags": "; ".join(tags_list),
+                "description": description,
+            }
+        # else, fall back to HTML parsing for richer data
+
+    # 2) HTML fallback
+    try:
+        html = fetch_html_page(appid)
+        parsed = parse_html_to_metadata(appid, title_hint, html)
+        return parsed
+    except Exception as e:
+        # Last resort: return a minimal record so pipeline can continue
+        print(f"[catalogue_update] fallback failed for {appid}: {e}")
+        return {
+            "appid": int(appid),
+            "title": title_hint or f"appid_{appid}",
+            "developers": "",
+            "publishers": "",
+            "genres": "",
+            "tags": "",
+            "description": "",
+        }
+
+
+# -------------------------------------------------------------------
+# Catalogue extension / rebuild pipeline
+# -------------------------------------------------------------------
 def extend_catalogue_with_missing_games(
     owned_df: pd.DataFrame,
     catalogue_df: pd.DataFrame,
     max_new: int = 50,
 ) -> pd.DataFrame:
     """
-    Ensure that all (or at most `max_new`) games in owned_df (by appid) exist in catalogue_df.
-
-    Logic:
-      - Find games the user owns that are NOT in the catalogue.
-      - Sort those missing games by playtime_min descending.
-      - Take the top `max_new` of them (safety cap).
-      - Crawl & parse details for just those appids.
-      - Append new rows to the catalogue_df.
-
-    Returns:
-        updated_df: updated catalogue DataFrame (in-memory only).
+    Extend catalogue_df with missing appids from owned_df, crawling up to max_new.
     """
     ensure_directories()
 
-    # Existing appids in catalogue
-    catalog_appids = set(int(a) for a in catalogue_df["appid"])
-
-    # Owned games that are NOT in the catalogue yet
+    catalog_appids = set(int(a) for a in catalogue_df["appid"].astype(int))
     missing_owned = owned_df[~owned_df["appid"].isin(catalog_appids)].copy()
 
     if missing_owned.empty:
-        print("[catalogue_update] No missing games – catalogue already covers user library.")
+        print("[catalogue_update] no missing games found.")
         return catalogue_df
 
-    # Sort missing games by playtime (most played first)
     if "playtime_min" in missing_owned.columns:
         missing_owned = missing_owned.sort_values("playtime_min", ascending=False)
-    else:
-        # Fallback: no playtime column? Just keep as-is.
-        print("[catalogue_update] Warning: 'playtime_min' not found; cannot rank by playtime.")
-    
-    # Apply safety cap: only crawl top `max_new` missing games
+
     if len(missing_owned) > max_new:
-        print(
-            f"[catalogue_update] Found {len(missing_owned)} missing games; "
-            f"capping crawl to top {max_new} by playtime."
-        )
+        print(f"[catalogue_update] capping crawls to top {max_new} missing games.")
         missing_owned = missing_owned.head(max_new)
-    else:
-        print(f"[catalogue_update] Found {len(missing_owned)} missing games to crawl.")
 
     missing_appids = [int(a) for a in missing_owned["appid"].tolist()]
-
-    # Map appid -> title from owned_df so we have a reasonable title fallback.
-    title_map = {
-        int(row["appid"]): str(row.get("title", "")).strip()
-        for _, row in owned_df.iterrows()
-    }
-
-    cookies = get_steam_cookies()
-    session = make_session(cookies)
+    title_map = {int(row["appid"]): str(row.get("title", "")).strip()
+                 for _, row in owned_df.iterrows()}
 
     new_rows = []
-
-    for idx, appid in enumerate(missing_appids, start=1):
-        title_guess = title_map.get(appid, f"appid_{appid}")
-        url = clean_url(f"https://store.steampowered.com/app/{appid}")
-
-        print(
-            f"[catalogue_update] ({idx}/{len(missing_appids)}) "
-            f"Fetching metadata for missing appid={appid} title='{title_guess[:40]}'…"
-        )
-
+    for i, appid in enumerate(missing_appids, start=1):
+        hint = title_map.get(appid, "")
+        print(f"[catalogue_update] ({i}/{len(missing_appids)}) fetching {appid} …")
         try:
-            time.sleep(REQUEST_DELAY + random.random() * 0.3)
-            html = fetch_with_retry(session, url)
-            row = parse_detail_html(appid, title_guess, html)
+            time.sleep(REQUEST_DELAY + random.random() * 0.4)
+            row = fetch_game_metadata(appid, title_hint=hint)
             new_rows.append(row)
         except Exception as e:
-            print(f"[catalogue_update] ❌ Error fetching appid={appid} — {e}")
+            print(f"[catalogue_update] error fetching {appid}: {e}")
+            continue
 
     if not new_rows:
-        print("[catalogue_update] No new rows could be fetched; catalogue unchanged.")
+        print("[catalogue_update] no new rows fetched.")
         return catalogue_df
 
     new_df = pd.DataFrame(new_rows)
-
-    # Align columns with existing catalogue where possible.
     merged_df = pd.concat(
         [catalogue_df, new_df.reindex(columns=catalogue_df.columns, fill_value=pd.NA)],
         ignore_index=True,
     )
-
-    print(f"[catalogue_update] Catalogue extended with {len(new_df)} new games.")
+    print(f"[catalogue_update] extended catalogue by {len(new_df)} rows.")
     return merged_df
 
 
-def rebuild_feature_matrix_and_cache(
-    updated_df: pd.DataFrame,
-) -> sp.csr_matrix:
+def rebuild_feature_matrix_and_cache(updated_df: pd.DataFrame) -> sp.csr_matrix:
     """
-    Rebuild the full feature matrix from scratch and cache it to FEATURE_MATRIX_NPZ.
-
-    This is the simplest, most robust approach for now.
+    Rebuild the TF–IDF + OHE feature matrix and save to NPZ.
     """
-    print("[catalogue_update] Rebuilding feature matrix from updated catalogue…")
+    print("[catalogue_update] rebuilding feature matrix …")
     full_matrix_norm = build_feature_matrix(updated_df)
-    save_npz(FEATURE_MATRIX_NPZ, full_matrix_norm)
-    print(f"[catalogue_update] Saved updated feature matrix to: {FEATURE_MATRIX_NPZ}")
-
-    # Also overwrite the CSV to keep everything consistent.
+    FEATURE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    from scipy.sparse import save_npz
+    save_npz(FEATURE_CACHE, full_matrix_norm)
     updated_df.to_csv(INPUT_CSV, index=False)
-    print(f"[catalogue_update] Saved updated catalogue CSV to: {INPUT_CSV}")
-
+    print(f"[catalogue_update] saved feature matrix -> {FEATURE_CACHE}")
+    print(f"[catalogue_update] saved catalogue CSV -> {INPUT_CSV}")
     return full_matrix_norm
 
 
@@ -299,24 +319,15 @@ def ensure_user_games_in_catalogue_and_refresh(
     catalogue_df: pd.DataFrame,
 ) -> Tuple[pd.DataFrame, sp.csr_matrix]:
     """
-    High-level helper used by main.py:
-
-      1. Extend the catalogue with any games from owned_df that are missing.
-      2. If anything was added, rebuild the feature matrix and cache.
-      3. If nothing was added, simply load the existing matrix from FEATURE_MATRIX_NPZ.
-
-    Returns:
-        new_df, new_full_matrix_norm
+    Main wrapper: extend catalogue if needed, rebuild matrix when changed.
     """
     original_count = len(catalogue_df)
     updated_df = extend_catalogue_with_missing_games(owned_df, catalogue_df)
-
     if len(updated_df) == original_count:
-        # No changes → just load the existing matrix (assumed up-to-date).
-        print("[catalogue_update] No new games added; using existing feature matrix.")
-        full_matrix_norm = load_npz(FEATURE_MATRIX_NPZ)
+        print("[catalogue_update] no change; loading cached feature matrix.")
+        from scipy.sparse import load_npz
+        full_matrix_norm = load_npz(FEATURE_CACHE)
         return updated_df, full_matrix_norm
 
-    # Rebuild matrix because catalogue changed
     full_matrix_norm = rebuild_feature_matrix_and_cache(updated_df)
     return updated_df, full_matrix_norm
