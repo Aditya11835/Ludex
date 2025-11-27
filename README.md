@@ -1,179 +1,126 @@
-# 🚀 Ludex: A Hybrid Content + Collaborative Game Recommendation System for Steam
+# 🎮 **Ludex — Hybrid Game Recommendation System (Steam)**
 
-Ludex is a machine learning based game recommendation engine built for the Steam store as part of a 5th-semester B.Tech project at IIIT Pune.  
-It aims to replace the “discoverability lottery” with **deeply personalized**, **content-aware**, **CF-enhanced**, and **diversity-rich** recommendations.
-
-Ludex learns from:
-
-- What you **play**
-- How long you **play it**
-- What the **games actually are** (tags, genres, mechanics, writing style)
-- Your **anchor games** (your core taste)
-- Playtime similarity across **millions of users** (CF)
-
-> ### 🔷 Status (2025)
->
-> ✔ Complete **CBF Pipeline** with TF-IDF embeddings  
-> ✔ **Auto-extending game catalogue** (no missing owned games)  
-> ✔ **CBF: Global Taste Vector + Anchor Reinforcement + MMR**  
-> ✔ Fully working **CF implicit ALS model** (training, updating, recommending)  
-> ✔ Automatic **interaction enrichment + conditional retrain**
-
-> ❗ In Progress
->
-> - Final Hybrid Blending (CBF + CF unified score)
-> - Evaluation Suite (Recall@K, MAP, NDCG)
-> - Simple Web UI
+Ludex is a fully offline, hybrid **Content-Based + Collaborative Filtering** recommendation engine designed to provide **high-quality, diverse, and personalized Steam game suggestions**. Built as an academic project, its goal is to outperform Steam’s default discoverability algorithm by combining **metadata**, **player history**, and **diversity-aware ranking**.
 
 ---
 
-# 🧠 System Overview
+## 🧩 **Overview**
 
-**Pipeline:**
+Ludex works by blending three components:
 
-1. Steam crawl → basic appID list
-2. Refinement (remove NSFW, CJK/Arabic titles, duplicates)
-3. Full metadata scrape (genres/tags/description/developer/publisher)
-4. TF-IDF + OHE + weighted feature blocks
-5. L2-normalized embeddings (`recommender_matrix.npz`)
-6. User CBF profile
-7. Anchor-based micro-preference model
-8. Diversity layer (MMR)
-9. CF implicit ALS model
-10. Hybrid-ready scoring
+1. **Content-Based Filtering (CBF)**  
+   Uses metadata such as descriptions, tags, genres, and developers.
 
-Every run of the recommender **auto-detects missing games**, scrapes them, and **rebuilds the matrix on the fly**.
+2. **Collaborative Filtering (CF)**  
+   Finds similar users and recommends games based on behavior patterns.
+
+3. **MMR Re-ranking (Maximal Marginal Relevance)**  
+   Ensures recommended games are both relevant and diverse.
+
+The project includes a crawling pipeline using the Steam Store API, with a fallback HTML parser based on Requests + BeautifulSoup (no Selenium or undetected-chromedriver required).
 
 ---
 
-# 🔄 CBF Pipeline (Implemented)
+## 🏗️ **Project Structure**
 
-## 1. TF-IDF & Metadata Feature Blocks
-
-Weights are tuned to emphasize genres and tags:
-
-| Block         | Encoder         | Weight |
-| ------------- | --------------- | ------ |
-| Genres + Tags | TF-IDF (1–2g)   | 0.90   |
-| Title         | TF-IDF (1–2g)   | 0.25   |
-| Description   | TF-IDF (n-gram) | 0.20   |
-| Developers    | OHE             | 0.20   |
-| Publishers    | OHE             | 0.10   |
-
-Final embedding per game:
-`f_i = Normalize( title ; tags ; description ; developer ; publisher )`
-
-Saved as `recommender_matrix.npz`.
+```
+Ludex/
+│── CBF/                 
+│── CF/                  
+│── crawlers/            
+│── main.py              
+│── requirements.txt
+│── LICENSE
+│── .env.example
+```
 
 ---
 
-# 🌟 Hybrid CBF Engine (Implemented, CF-ready)
+## 🕸️ **1. Crawlers & Metadata Extraction**
 
-Ludex uses a modern multi-stage personalization mechanism.
-
-## 1. Global User Vector
-
-User vector `u` is built from playtime-weighted weighted embeddings:
-`score_global[i] = dot(u, f_i)`
-
-This captures long-term preference.
+The crawler collects:
+- Titles  
+- Descriptions  
+- Tags, genres  
+- Developers, publishers  
+- Screenshots & release info  
 
 ---
 
-## 2. Anchor-Based Reinforcement
+## 🧠 **2. Content-Based Filtering (CBF)**
 
-Anchor games = top-playtime titles.
+### 🔹 TF-IDF  
+Used on descriptions, tags, genres, and titles.
 
-For each anchor game `a`:
+### 🔹 One-Hot Encoding  
+Used for developers & publishers.
 
-This captures long-term preference.
-
----
-
-## 2. Anchor-Based Reinforcement
-
-Anchor games = top-playtime titles.
-
-For each anchor game `a`:
-`anchor[a][i] = dot(f_a, f_i)`
-
-Then combine:
-`anchor_soft[i] = Σ (w_a * anchor[a][i])`
-
-This boosts micro-tastes (e.g., if you love roguelite platformers, they naturally rise).
+### 🔹 Weighted Embedding Blocks  
+Combined into one multi-block feature vector for cosine similarity ranking.
 
 ---
 
-## 3. Blended CBF Score
+## 👥 **3. Collaborative Filtering (CF)**
 
-`combined_raw[i] = (1 − β) * score_global[i] + β * anchor_soft[i]`
+Analyzes:
+- User playtime  
+- Owned games  
+- Behavioral similarity  
 
-β typically = **0.3**.
-
----
-
-## 4. MMR Diversity
-
-Maximal Marginal Relevance ensures genre diversity:
-
-`final[i] = λ * combined_raw[i] − (1 − λ) * max_sim_to_selected(i)`
-
-λ ≈ **0.7** gives a healthy mix of comfort picks + diverse exploration.
+This enables discovery of games beyond metadata similarity.
 
 ---
 
-# 🤝 CF (Collaborative Filtering)
+## 🔗 **4. Hybrid Recommendation System**
 
-Ludex implements **implicit ALS** collaborative filtering:
-
-Components include:
-
-- `CF/cf_model.py`
-
-  - trains / loads the ALS model
-  - manages `cf_als_model.pkl` + `cf_als_index.pkl`
-
-- `CF/interactions_update.py`
-
-  - loads `user_game_playtime_top20.csv`
-  - auto-adds missing users (via Steam API)
-  - grows interaction matrix
-  - triggers conditional retrain
-
-- `CF/CF_recommend.py`
-  - main CF recommendation engine with:
-    - popularity normalization
-    - friend-weighted re-ranking
-    - fallback logic
-    - cold-start strategies
-
-> CF is **fully operational** and used in production.  
-> What remains is the full **CBF+CF hybrid score combination**.
+Uses:
+- Weighted CBF + CF blending  
+- Optional SVD latent factors  
+- Score normalization  
+- Playtime scaling  
 
 ---
 
-# 🔮 Planned Hybrid Score
+## 🎨 **5. MMR — Diversity Enhancement**
 
-Planned final combination:
-`Hybrid(u, i) = α * CF_norm(u, i) + (1 − α) * CBF_norm(u, i)`
-
-- Strong CBF → lower α
-- Weak CBF (few games) → higher α
-
-Currently CBF runs standalone; CF also runs standalone.  
-Hybrid wiring is trivial and will be added next.
+MMR ensures diversity by balancing:
+- **Relevance**  
+- **Variety**  
 
 ---
 
-# 🧩 Design Principles
+## ▶️ **6. Running the Project**
 
-- **No missing games** (auto extend catalogue)
-- **Explainability** through anchor games
-- **Fair genre representation** through MMR
-- **Balanced personalization**
-- **CF + CBF complementarity**
-- **Full modularity**
-- **Steam API caching** to minimize API calls
+### Install:
+```
+pip install -r requirements.txt
+```
+
+### Run:
+```
+python main.py
+```
+
+---
+
+# 📁 Data Files
+
+- `data/raw/game_details.csv` — scraped metadata
+- `data/raw/user_game_playtime_top20.csv` — interactions for CF
+- `data/processed/recommender_matrix.npz` — CBF embeddings
+- `data/processed/cf_als_model.pkl` — CF model
+- `data/processed/cf_als_index.pkl` — CF mapping (item/user IDs)
+
+---
+
+## 🛠️ **Tech Stack**
+
+- Python  
+- scikit-learn  
+- pandas  
+- NumPy  
+- BeautifulSoup  
+- undetected-chromedriver  
 
 ---
 
@@ -188,16 +135,6 @@ Hybrid wiring is trivial and will be added next.
 
 - Simple web UI with Steam login
 - Real-time recommendation preview
-
----
-
-# 📁 Data Files
-
-- `data/raw/game_details.csv` — scraped metadata
-- `data/raw/user_game_playtime_top20.csv` — interactions for CF
-- `data/processed/recommender_matrix.npz` — CBF embeddings
-- `data/processed/cf_als_model.pkl` — CF model
-- `data/processed/cf_als_index.pkl` — CF mapping (item/user IDs)
 
 ---
 
