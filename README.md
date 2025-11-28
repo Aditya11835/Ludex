@@ -31,7 +31,10 @@ Ludex/
 │── main.py              
 │── requirements.txt
 │── LICENSE
-│── .env.example
+│── .env
+|── data/
+   |── raw/
+   |── processed/
 ```
 
 ---
