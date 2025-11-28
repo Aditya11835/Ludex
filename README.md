@@ -121,23 +121,11 @@ python main.py
 - Python  
 - scikit-learn  
 - pandas  
-- NumPy  
+- NumPy
+- SciPy
 - BeautifulSoup  
-- undetected-chromedriver  
-
----
-
-# 📅 Roadmap (2025–2026)
-
-### Short-term
-
-- Add hybrid scoring module
-- Build evaluation suite (Recall@K, Precision@K, MAP, NDCG)
-
-### Medium-term
-
-- Simple web UI with Steam login
-- Real-time recommendation preview
+- undetected-chromedriver
+- Selenium
 
 ---
 
